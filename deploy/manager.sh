@@ -504,30 +504,51 @@ service_menu() {
 
 
 logs_menu() {
+...
+}
+
+
+# ==============================
+# 系统状态查看
+# ==============================
+
+status_menu() {
 
     header
 
-    echo "最近日志"
+    echo "系统状态"
     echo
+    echo "=============================="
 
-    if [ -f "$LOG_DIR/bot.log" ]; then
+    echo
+    echo "【系统信息】"
+    hostnamectl 2>/dev/null || echo "无法获取系统信息"
 
-        tail -50 "$LOG_DIR/bot.log"
+    echo
+    echo "【运行时间】"
+    uptime
 
+    echo
+    echo "【CPU / 内存】"
+    free -h
+
+    echo
+    echo "【磁盘空间】"
+    df -h /
+
+    echo
+    echo "【TG Bot 服务】"
+
+    if systemctl list-unit-files tg_bot.service >/dev/null 2>&1; then
+        systemctl status tg_bot.service --no-pager || true
     else
-
-        echo "暂无 bot.log"
-
-        echo
-
-        echo "Systemd 日志:"
-        journalctl -u tg_bot.service -n 30 --no-pager
-
+        echo "❌ tg_bot.service 不存在"
     fi
 
     pause
-
 }
+
+
 main_menu() {
     while true; do
         header
