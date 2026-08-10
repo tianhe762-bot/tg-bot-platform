@@ -3,97 +3,81 @@
 # TG Bot Release Builder
 # ============================================================
 
+set -euo pipefail
 
-ROOT="/opt/tg_bot"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VERSION_FILE="$ROOT/VERSION"
 
-RELEASE="/opt/tg_release"
-
-
-VERSION=$(cat "$ROOT/VERSION")
-
-
-PACKAGE="tg_bot-v${VERSION}.tar.gz"
-
-
-
-mkdir -p "$RELEASE/releases"
-
-
-
-echo "当前版本:"
-echo "$VERSION"
-
-
-echo
-
-echo "执行发布检查..."
-
-bash "$ROOT/tests/release_check.sh"
-
-
-if [ $? -ne 0 ]
-
-then
-
-echo "❌ 发布检查失败"
-
-exit 1
-
+if [ ! -f "$VERSION_FILE" ]; then
+    echo "❌ 找不到 VERSION 文件: $VERSION_FILE"
+    exit 1
 fi
 
+VERSION=$(tr -d ' \r\n' < "$VERSION_FILE")
 
+if [ -z "$VERSION" ]; then
+    echo "❌ VERSION 为空"
+    exit 1
+fi
 
+echo "=========================================="
+echo " Building TG Bot Release v${VERSION}"
+echo "=========================================="
 echo
 
-echo "开始打包..."
+# 1. 发布前 Shell 语法严格检查
+echo "[1/3] 执行 Shell 语法检查..."
+FAIL=0
+while IFS= read -r script; do
+    if ! bash -n "$script"; then
+        echo "❌ 语法错误: $script"
+        FAIL=1
+    fi
+done < <(find "$ROOT" -type f -name "*.sh" -not -path "*/.git/*")
 
+if [ "$FAIL" -ne 0 ]; then
+    echo "❌ 发布终止：存在 Shell 语法错误！"
+    exit 1
+fi
+echo "✅ 所有 Shell 脚本语法校验通过"
 
+# 2. 打包准备
+OUT_DIR="$ROOT/releases"
+mkdir -p "$OUT_DIR"
 
-tar \
--zczf "$RELEASE/releases/$PACKAGE" \
--C "$ROOT" \
-app \
-deploy \
-scripts \
-systemd \
-templates \
-tests \
-VERSION \
-install.sh \
-release.json
-
-
-cp "$ROOT/VERSION" \
-"$RELEASE/VERSION"
-
-
-
-cp "$ROOT/install.sh" \
-"$RELEASE/install.sh"
-
-
+TAR_NAME="tg_bot-v${VERSION}.tar.gz"
+TAR_PATH="$OUT_DIR/$TAR_NAME"
+SHA_PATH="${TAR_PATH}.sha256"
 
 echo
+echo "[2/3] 创建归档包..."
 
-echo "================================"
+IGNORE_FILE="$ROOT/.releaseignore"
+EXCLUDE_ARGS=()
 
-echo "发布完成"
+if [ -f "$IGNORE_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        EXCLUDE_ARGS+=("--exclude=$line")
+    done < "$IGNORE_FILE"
+fi
 
+tar -czf "$TAR_PATH" \
+    -C "$ROOT" \
+    --exclude=".git" \
+    --exclude="releases" \
+    "${EXCLUDE_ARGS[@]}" \
+    .
+
+echo "✅ 打包完成: $TAR_PATH"
+
+# 3. 生成 SHA256 校验和
 echo
+echo "[3/3] 生成 SHA256 校验文件..."
+(cd "$OUT_DIR" && sha256sum "$TAR_NAME" > "${TAR_NAME}.sha256")
 
-echo "$RELEASE/releases/$PACKAGE"
+echo "✅ 校验文件生成完成: $SHA_PATH"
 echo
-
-echo "生成SHA256..."
-
-sha256sum \
-"$RELEASE/releases/$PACKAGE" \
-> "$RELEASE/releases/$PACKAGE.sha256"
-
-
-echo
-
-echo "SHA256完成:"
-cat "$RELEASE/releases/$PACKAGE.sha256"
-
-echo "================================"
+echo "=========================================="
+echo " Release Build Success (v${VERSION})"
+echo "=========================================="
