@@ -169,23 +169,40 @@ wol_config() {
 
 
 mihomo_config() {
+
     header
+
     local FILE="$CONFIG_DIR/system.env"
+
     CURRENT=$(get_env "$FILE" "MIHOMO_API")
+
     echo "Mihomo API 配置"
     echo
     echo "当前: ${CURRENT:-http://127.0.0.1:9999}"
     echo
+    echo "输入 0 返回"
+    echo
+
     read -rp "请输入 Mihomo API 地址 [http://127.0.0.1:9999]: " API
+
+
+    if [ "$API" = "0" ]; then
+        return
+    fi
+
+
     if [ -z "$API" ]; then
         API="http://127.0.0.1:9999"
     fi
 
 
     set_env "$FILE" "MIHOMO_API" "$API"
+
     echo
     echo "✅ Mihomo API 已保存"
+
     restart_bot
+
     pause
 }
 
@@ -504,7 +521,66 @@ service_menu() {
 
 
 logs_menu() {
-...
+
+    while true; do
+
+        header
+
+        echo "日志查看"
+        echo
+        echo "1. 查看 TG Bot 实时日志"
+        echo "2. 查看 Systemd 服务日志"
+        echo "0. 返回"
+        echo
+
+        read -rp "请选择: " CHOICE
+
+
+        case "$CHOICE" in
+
+            1)
+
+                echo
+                echo "TG Bot 日志:"
+                echo
+
+                if [ -f "$LOG_DIR/bot.log" ]; then
+                    tail -50 "$LOG_DIR/bot.log"
+                else
+                    echo "❌ bot.log 不存在"
+                fi
+
+                pause
+                ;;
+
+
+            2)
+
+                echo
+                echo "Systemd 日志:"
+                echo
+
+                journalctl -u tg_bot.service -n 50 --no-pager || true
+
+                pause
+                ;;
+
+
+            0)
+
+                return
+                ;;
+
+
+            *)
+
+                echo "无效选项"
+                sleep 1
+                ;;
+
+        esac
+
+    done
 }
 
 
