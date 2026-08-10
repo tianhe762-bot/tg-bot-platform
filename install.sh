@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # ============================================================
 # TG Bot Bootstrap Installer (GitHub Release Automated)
 #
@@ -172,11 +172,15 @@ echo
 echo "运行 'tg-bot' 命令进入控制菜单。"
 echo
 
+echo
+echo
+echo "首次配置："
+echo
+echo "请输入以下命令进入配置向导："
+echo
+echo "    tg-bot"
+echo
+echo "然后选择【首次安装配置】"
+echo
 
-if [ -f "/opt/tg_bot/deploy/first_setup.sh" ]; then
-    echo "开始首次配置..."
-    echo
-    bash /opt/tg_bot/deploy/first_setup.sh
-else
-    echo "首次配置脚本不存在，请运行 'tg-bot'"
 fi

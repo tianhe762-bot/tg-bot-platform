@@ -4,7 +4,7 @@
 # ============================================================
 
 
-set -u
+set -uo pipefail
 
 
 ROOT="/opt/tg_bot"
@@ -438,7 +438,96 @@ update_menu() {
     done
 }
 
+service_menu() {
 
+    while true; do
+
+        header
+
+        echo "服务管理"
+        echo
+        echo "1. 查看 TG Bot 服务状态"
+        echo "2. 启动 TG Bot"
+        echo "3. 停止 TG Bot"
+        echo "4. 重启 TG Bot"
+        echo "5. 查看 Systemd 日志"
+        echo "0. 返回"
+        echo
+
+        read -rp "请选择: " CHOICE
+
+
+        case "$CHOICE" in
+
+            1)
+                systemctl status tg_bot.service --no-pager
+                pause
+                ;;
+
+            2)
+                systemctl start tg_bot.service
+                echo "✅ 服务已启动"
+                pause
+                ;;
+
+            3)
+                systemctl stop tg_bot.service
+                echo "✅ 服务已停止"
+                pause
+                ;;
+
+            4)
+                systemctl restart tg_bot.service
+                echo "✅ 服务已重启"
+                pause
+                ;;
+
+            5)
+                journalctl -u tg_bot.service -n 50 --no-pager
+                pause
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                echo "无效选项"
+                sleep 1
+                ;;
+
+        esac
+
+    done
+}
+
+
+
+logs_menu() {
+
+    header
+
+    echo "最近日志"
+    echo
+
+    if [ -f "$LOG_DIR/bot.log" ]; then
+
+        tail -50 "$LOG_DIR/bot.log"
+
+    else
+
+        echo "暂无 bot.log"
+
+        echo
+
+        echo "Systemd 日志:"
+        journalctl -u tg_bot.service -n 30 --no-pager
+
+    fi
+
+    pause
+
+}
 main_menu() {
     while true; do
         header

@@ -4,6 +4,7 @@
 # ============================================================
 
 set -euo pipefail
+cd /
 
 TARGET="/opt/tg_bot"
 SOURCE="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
