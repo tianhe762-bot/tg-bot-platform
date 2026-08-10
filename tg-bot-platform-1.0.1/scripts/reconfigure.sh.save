@@ -1,0 +1,251 @@
+kkkkk#!/bin/bash
+# ============================================================
+# Telegram Server Bot
+# Device Auto Configuration v3
+#
+# 功能：
+# 自动检测：
+# - 系统
+# - CPU
+# - 内存
+# - IP
+# - 网卡
+# - 系统盘
+# - 数据盘
+# - UUID
+# - Docker
+# - Mihomo API
+#
+# 不修改系统，只生成 device.conf
+# ============================================================
+
+
+set -e
+
+
+ROOT="/opt/tg_bot"
+CONFIG="$ROOT/config/device.conf"
+
+
+echo "================================"
+echo "开始检测设备信息"
+echo "================================"
+
+
+# ==========================
+# 系统信息
+# ==========================
+
+OS_VERSION=$(grep PRETTY_NAME /etc/os-release | cut -d '"' -f2)
+
+
+# ==========================
+# CPU
+# ==========================
+
+CPU_MODEL=$(lscpu | awk -F: '/Model name/ {print $2}' | xargs)
+
+
+# ==========================
+# 内存
+# ==========================
+
+MEMORY=$(free -h | awk '/Mem:/ {print $2}')
+
+
+# ==========================
+# IP
+# ==========================
+
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+
+# ==========================
+# 网卡
+# ==========================
+
+MAIN_INTERFACE=$(ip route | awk '/default/ {print $5}')
+
+
+# ==========================
+# 系统盘识别
+# ==========================
+
+ROOT_PARTITION=$(findmnt -n -o SOURCE /)
+
+
+echo
+echo "根目录分区:"
+echo "$ROOT_PARTITION"
+
+
+ROOT_DISK=$(lsblk -no PKNAME "$ROOT_PARTITION" 2>/dev/null || true)
+
+
+if [ -z "$ROOT_DISK" ]; then
+
+    echo "错误：无法识别系统盘"
+
+    exit 1
+
+fi
+
+
+echo
+echo "系统盘:"
+echo "/dev/$ROOT_DISK"
+
+
+
+# ==========================
+# 数据盘识别
+# ==========================
+
+DATA_DISK=""
+DATA_UUID=""
+
+
+echo
+echo "寻找数据盘..."
+
+
+while read NAME SIZE TYPE
+do
+
+    if [ "$TYPE" != "disk" ]; then
+        continue
+    fi
+
+
+    # 排除系统盘
+
+    if [ "$NAME" = "$ROOT_DISK" ]; then
+        continue
+    fi
+
+
+    UUID=$(blkid "/dev/$NAME" \
+    | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
+
+
+    DATA_DISK="/dev/$NAME ($SIZE)"
+
+    DATA_UUID="$UUID"
+
+
+    break
+
+
+done < <(lsblk -dn -o NAME,SIZE,TYPE)
+
+
+
+echo
+echo "数据盘:"
+echo "$DATA_DISK"
+
+echo "UUID:"
+echo "$DATA_UUID"
+
+
+
+# ==========================
+# Docker
+# ==========================
+
+if command -v docker >/dev/null 2>&1
+then
+
+    DOCKER_STATUS="installed"
+
+else
+
+    DOCKER_STATUS="not_installed"
+
+fi
+
+
+
+# ==========================
+# Mihomo API自动检测
+# ==========================
+
+MIHOMO_API=""
+
+
+for PORT in 9090 9097 9999
+do
+
+    RESULT=$(curl -s --max-time 2 \
+    "http://127.0.0.1:$PORT/" || true)
+
+
+    if echo "$RESULT" | grep -q "mihomo"
+    then
+
+        MIHOMO_API="http://127.0.0.1:$PORT"
+
+        break
+
+    fi
+
+done
+
+
+
+# ==========================
+# 写入配置
+# ==========================
+
+cat > "$CONFIG" <<EOF
+# ============================================================
+# 自动生成设备配置
+#
+# 时间:
+# $(date)
+# ============================================================
+
+
+DEVICE_NAME="$(hostname)"
+
+
+OS_VERSION="$OS_VERSION"
+
+
+CPU_MODEL="$CPU_MODEL"
+
+
+MEMORY="$MEMORY"
+
+
+SERVER_IP="$SERVER_IP"
+
+
+MAIN_INTERFACE="$MAIN_INTERFACE"
+
+
+SYSTEM_DISK="/dev/$ROOT_DISK"
+
+
+DATA_DISK="$DATA_DISK"
+
+
+DATA_UUID="$DATA_UUID"
+
+
+MIHOMO_API="$MIHOMO_API"
+
+
+DOCKER_STATUS="$DOCKER_STATUS"
+
+EOF
+
+
+
+echo
+echo "================================"
+echo "设备检测完成"
+echo "================================"
+
+
+cat "$CONFIG"

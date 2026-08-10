@@ -1,0 +1,10 @@
+[Unit]
+Description=Telegram Monitor Timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Unit=tg_monitor.service
+
+[Install]
+WantedBy=timers.target
