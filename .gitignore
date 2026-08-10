@@ -1,0 +1,18 @@
+# 用户配置
+config/*.env
+
+# 备份
+backups/
+
+# 日志
+logs/
+
+# 临时文件
+*.log
+*.tmp
+
+# 发布包
+releases/
+
+# 系统缓存
+__pycache__/

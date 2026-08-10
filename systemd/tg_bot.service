@@ -1,0 +1,27 @@
+[Unit]
+Description=Telegram Server Bot
+After=network-online.target
+Wants=network-online.target
+
+
+[Service]
+
+Type=simple
+
+User=root
+
+WorkingDirectory=/opt/tg_bot
+
+
+ExecStart=/bin/bash /opt/tg_bot/app/tg_bot.sh
+
+
+Restart=always
+
+RestartSec=5
+
+
+
+[Install]
+
+WantedBy=multi-user.target
