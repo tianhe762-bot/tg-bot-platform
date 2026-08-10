@@ -1,0 +1,10 @@
+[Unit]
+Description=Telegram Health Timer
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+Unit=tg_health.service
+
+[Install]
+WantedBy=timers.target
