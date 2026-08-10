@@ -1,6 +1,0 @@
-[Unit]
-Description=Telegram Bot Monitor
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /opt/tg_bot/app/services/scheduler.sh monitor
