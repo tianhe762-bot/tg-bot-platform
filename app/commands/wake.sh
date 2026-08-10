@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 
 
 wake_execute()
