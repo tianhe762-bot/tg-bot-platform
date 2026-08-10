@@ -1,263 +1,151 @@
 #!/bin/bash
 # ============================================================
-# TG Bot Bootstrap Installer
+# TG Bot Bootstrap Installer (GitHub Release Automated)
 #
 # Usage:
-#
-# bash install.sh
-#
-# 或
-#
-# bash install.sh https://example.com/tg_bot.tar.gz
-#
+#   curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/install.sh | bash
+#   或指定自定义包 URL:
+#   bash install.sh https://example.com/tg_bot-v1.0.1.tar.gz
 # ============================================================
 
-set -e
+set -euo pipefail
 
+REPO="tianhe762-bot/tg-bot-platform"
+API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "❌ 请使用 root 权限运行"
     exit 1
 fi
 
-
 clear
-
 
 echo "=========================================="
 echo "       TG Bot Installer"
 echo "=========================================="
 echo
 
-
-PACKAGE_URL="${1:-${TG_BOT_PACKAGE_URL:-}}"
-
-
-# ============================================================
-# 输入安装包地址
-# ============================================================
-
-if [ -z "$PACKAGE_URL" ]; then
-
-    echo "请输入 TG Bot 程序安装包地址。"
-    echo
-    echo "要求为 .tar.gz 文件，例如:"
-    echo
-    echo "https://example.com/releases/tg_bot-latest.tar.gz"
-    echo
-
-    read -rp "安装包 URL: " PACKAGE_URL
-
-fi
-
-
-if [ -z "$PACKAGE_URL" ]; then
-    echo "❌ URL不能为空"
-    exit 1
-fi
-
-
-echo
-echo "程序来源:"
-echo "$PACKAGE_URL"
-echo
-
-
-# ============================================================
-# Bootstrap依赖
-# ============================================================
-
-echo "[1/4] 安装基础工具..."
-
-
+# 1. 基础工具校验与安装
+echo "[1/4] 检查并安装基础依赖..."
 export DEBIAN_FRONTEND=noninteractive
 
-
 apt-get update -qq
-
-
 apt-get install -y \
     curl \
     ca-certificates \
     tar \
     rsync \
+    jq \
+    coreutils \
     >/dev/null
-
 
 echo "✅ 完成"
 
+# 2. 获取安装包 URL
+PACKAGE_URL="${1:-${TG_BOT_PACKAGE_URL:-}}"
+SHA256_URL=""
 
-# ============================================================
-# 下载
-# ============================================================
+if [ -z "$PACKAGE_URL" ]; then
+    echo
+    echo "[2/4] 从 GitHub Release 获取最新版本..."
+    
+    RELEASE_JSON=$(curl -sSL --connect-timeout 10 --retry 3 "$API_URL" || true)
+    
+    if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q "Not Found"; then
+        echo "⚠️ 无法从 GitHub API 获取最新 Release，转为手动输入。"
+        read -rp "请输入安装包 URL (.tar.gz): " PACKAGE_URL
+    else
+        PACKAGE_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz") and (endswith(".tar.gz.sha256") | not)) | .browser_download_url' | head -n 1)
+        SHA256_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz.sha256")) | .browser_download_url' | head -n 1)
+    fi
+fi
 
-echo
-echo "[2/4] 下载程序..."
+if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ]; then
+    echo "❌ 获取安装包地址失败"
+    exit 1
+fi
 
+echo "下载源: $PACKAGE_URL"
 
+# 3. 下载与校验
 TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 PACKAGE="$TMP_DIR/tg_bot.tar.gz"
-
 EXTRACT="$TMP_DIR/extract"
-
-
 mkdir -p "$EXTRACT"
 
-
-if ! curl -fL \
-    --connect-timeout 15 \
-    --retry 3 \
-    "$PACKAGE_URL" \
-    -o "$PACKAGE"
-then
-
-    echo
-    echo "❌ 下载失败"
-
-    rm -rf "$TMP_DIR"
-
-    exit 1
-
-fi
-
-
-echo "✅ 下载完成"
-
-
-# ============================================================
-# 解压
-# ============================================================
-
 echo
-echo "[3/4] 解压程序..."
+echo "[3/4] 下载程序包并校验..."
 
-
-if ! tar -xzf "$PACKAGE" -C "$EXTRACT"
-then
-
-    echo "❌ 解压失败"
-
-    rm -rf "$TMP_DIR"
-
+if ! curl -fL --connect-timeout 15 --retry 3 "$PACKAGE_URL" -o "$PACKAGE"; then
+    echo "❌ 下载安装包失败"
     exit 1
-
 fi
 
+if [ -n "$SHA256_URL" ] && [ "$SHA256_URL" != "null" ]; then
+    SHA256_FILE="$TMP_DIR/tg_bot.tar.gz.sha256"
+    if curl -fL --connect-timeout 10 --retry 2 "$SHA256_URL" -o "$SHA256_FILE"; then
+        EXPECTED_SHA=$(awk '{print $1}' "$SHA256_FILE")
+        ACTUAL_SHA=$(sha256sum "$PACKAGE" | awk '{print $1}')
+        
+        if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "❌ SHA256 校验失败!"
+            echo "期望值: $EXPECTED_SHA"
+            echo "实际值: $ACTUAL_SHA"
+            exit 1
+        fi
+        echo "✅ SHA256 校验通过"
+    else
+        echo "⚠️ 校验文件下载失败，跳过 SHA256 强校验"
+    fi
+fi
 
-SOURCE=$(find "$EXTRACT" \
-    -mindepth 1 \
-    -maxdepth 1 \
-    -type d \
-    | head -1)
+# 4. 解压与部署
+echo
+echo "[4/4] 解压并部署程序..."
 
+if ! tar -xzf "$PACKAGE" -C "$EXTRACT"; then
+    echo "❌ 解压失败"
+    exit 1
+fi
 
+SOURCE=$(find "$EXTRACT" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -z "$SOURCE" ]; then
     SOURCE="$EXTRACT"
 fi
 
-
 if [ ! -f "$SOURCE/deploy/deploy.sh" ]; then
-
-    echo
-    echo "❌ 安装包结构错误"
-    echo
-    echo "缺少:"
-    echo "deploy/deploy.sh"
-
-    rm -rf "$TMP_DIR"
-
+    echo "❌ 安装包结构错误，缺少 deploy/deploy.sh"
     exit 1
-
 fi
-
-
-echo "✅ 解压完成"
-
-
-# ============================================================
-# 正式部署
-# ============================================================
-
-echo
-echo "[4/4] 部署 TG Bot..."
-echo
-
 
 bash "$SOURCE/deploy/deploy.sh" "$SOURCE"
 
-
+# 保存系统环境配置
 mkdir -p /opt/tg_bot/config
-
-
-# 保存更新源
-
 SYSTEM_ENV="/opt/tg_bot/config/system.env"
-
 touch "$SYSTEM_ENV"
 
-
 TMP_ENV=$(mktemp)
-
-grep -v '^TG_BOT_PACKAGE_URL=' \
-    "$SYSTEM_ENV" \
-    > "$TMP_ENV" 2>/dev/null || true
-
-
-printf 'TG_BOT_PACKAGE_URL=%q\n' \
-    "$PACKAGE_URL" \
-    >> "$TMP_ENV"
-
-
+grep -v '^TG_BOT_PACKAGE_URL=' "$SYSTEM_ENV" > "$TMP_ENV" 2>/dev/null || true
+printf 'TG_BOT_PACKAGE_URL=%q\n' "$PACKAGE_URL" >> "$TMP_ENV"
 cat "$TMP_ENV" > "$SYSTEM_ENV"
-
 rm -f "$TMP_ENV"
-
 chmod 600 "$SYSTEM_ENV"
-
-
-rm -rf "$TMP_DIR"
-
 
 echo
 echo "=========================================="
 echo "      ✅ TG Bot 安装完成"
 echo "=========================================="
 echo
-echo "现在运行:"
-echo
-echo "    tg-bot"
-echo
-echo "进入数字管理菜单。"
+echo "运行 'tg-bot' 命令进入控制菜单。"
 echo
 
-
-if [ -f "/opt/tg_bot/deploy/first_setup.sh" ]
-
-then
-
-
-echo
-
-echo "开始首次配置..."
-
-echo
-
-
-bash /opt/tg_bot/deploy/first_setup.sh
-
-
+if [ -f "/opt/tg_bot/deploy/first_setup.sh" ]; then
+    echo "开始首次配置..."
+    echo
+    bash /opt/tg_bot/deploy/first_setup.sh
 else
-
-
-echo
-
-echo "首次配置程序不存在"
-
-echo "请运行:"
-echo
-
-echo "tg-bot"
-
-
+    echo "首次配置脚本不存在，请运行 'tg-bot'"
 fi
