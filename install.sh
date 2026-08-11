@@ -182,5 +182,3 @@ echo "    tg-bot"
 echo
 echo "然后选择【首次安装配置】"
 echo
-
-fi

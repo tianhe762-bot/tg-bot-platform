@@ -33,7 +33,7 @@ while IFS= read -r script; do
         echo "❌ 语法错误: $script"
         FAIL=1
     fi
-done < <(find "$ROOT" -type f -name "*.sh" -not -path "*/.git/*")
+done < <(find "$ROOT" -type f -name "*.sh" -not -path "$ROOT/.git/*")
 
 if [ "$FAIL" -ne 0 ]; then
     echo "❌ 发布终止：存在 Shell 语法错误！"
