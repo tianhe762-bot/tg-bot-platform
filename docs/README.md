@@ -56,11 +56,11 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 | Command     | Function     |
 | ----------- | ----------- |
 | `/status`   | 查看系统状态      |
-| `/mihomo`   | Mihomo节点与测速 |
+| `/mihomo`   | 最底层节点测速     |
 | `/switch`   | 切换代理节点    |
 | `/wake`     | Wake-on-LAN |
 | `/backup`   | 数据备份        |
-| `/update`   | 系统更新        |
+| `/update`   | 版本检查与更新    |
 | `/reboot`   | 重启服务器       |
 | `/shutdown` | 关闭服务器       |
 

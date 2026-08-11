@@ -67,6 +67,20 @@ mihomo_current_node()
 }
 
 
+# 获取最底层节点（过滤组/内置类型并去重）
+mihomo_leaf_nodes()
+{
+    curl -s --max-time 3 "$(mihomo_api)/proxies" \
+    | jq -r '
+        [ .proxies | to_entries[]
+          | select(.value.type as $t
+            | ["Selector","URLTest","Fallback","LoadBalance","Relay","Direct","Reject","Compatible","Pass","GLOBAL"]
+              | index($t) | not)
+          | .key ]
+        | unique[]' | tr -d '\r'
+}
+
+
 # 测速单个节点，输出延迟毫秒；失败输出空
 mihomo_delay()
 {
@@ -111,7 +125,7 @@ mihomo_connected()
 }
 
 
-# /mihomo 使用：并行测速，只显示连通且延迟 ≤800ms 的节点
+# /mihomo 使用：并行测速最底层节点，只显示连通且延迟 ≤800ms 的节点
 mihomo_nodes()
 {
     local GROUP NODE TMPDIR NODES NAME DELAY LINE RESULT
@@ -123,8 +137,7 @@ mihomo_nodes()
 
     TMPDIR=$(mktemp -d)
 
-    mapfile -t NODES < <(curl -s --max-time 3 "$(mihomo_api)/proxies" \
-        | jq -r --arg g "$GROUP" '.proxies[$g].all[]' | tr -d '\r')
+    mapfile -t NODES < <(mihomo_leaf_nodes)
 
     i=0
     for NAME in "${NODES[@]}"
@@ -149,12 +162,7 @@ mihomo_nodes()
     TOTAL=${#ITEMS[@]}
     COUNT=0
 
-    RESULT="🚀 Mihomo 可用节点
-
-节点组: $GROUP"
-    [ -n "$NODE" ] && RESULT="$RESULT
-当前: $NODE"
-    RESULT="$RESULT
+    RESULT="🚀 Mihomo 可用节点（$TOTAL 个）
 
 "
 
@@ -189,15 +197,45 @@ mihomo_nodes()
 }
 
 
-# /switch 使用：切换主节点组的选中节点
+# /switch 使用：切换节点并反馈新节点延迟
 mihomo_switch()
 {
     local NAME="$1"
-    local GROUP TYPE API_URL CODE JSON
+    local PROXIES MAIN GROUP TYPE AUTO API_URL CODE DELAY JSON
 
-    GROUP=$(mihomo_pick_group) || { echo "❌ Mihomo 未开启，无法切换节点"; return 0; }
-    TYPE=$(mihomo_group_type "$GROUP")
+    PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
+    if [ -z "$PROXIES" ]
+    then
+        echo "❌ Mihomo 未开启，无法切换节点"
+        return 0
+    fi
 
+    MAIN=$(mihomo_pick_group) || MAIN=""
+
+    # 优先切换主节点组，其次找第一个包含该节点的 Selector 组
+    GROUP=$(echo "$PROXIES" | jq -r --arg n "$NAME" --arg m "$MAIN" '
+        [ ( if $m != "" and (.proxies[$m].type == "Selector") and ((.proxies[$m].all // []) | index($n)) then $m else empty end ),
+          ( .proxies | to_entries[]
+            | select(.value.type == "Selector" and ((.value.all // []) | index($n)))
+            | .key ) ]
+        | .[0] // empty' | tr -d '\r')
+
+    if [ -z "$GROUP" ]
+    then
+        AUTO=$(echo "$PROXIES" | jq -r --arg n "$NAME" '
+            [ .proxies | to_entries[]
+              | select((( .value.all // [] ) | index($n)))
+              | .key ] | .[0] // empty' | tr -d '\r')
+        if [ -n "$AUTO" ]
+        then
+            echo "❌ 该节点位于自动选择组，无法手动切换"
+        else
+            echo "❌ 未找到该节点，请确认名称是否正确"
+        fi
+        return 0
+    fi
+
+    TYPE=$(echo "$PROXIES" | jq -r --arg g "$GROUP" '.proxies[$g].type // empty' | tr -d '\r')
     if [ "$TYPE" != "Selector" ]
     then
         echo "❌ 当前节点组为自动选择（$TYPE），无法手动切换"
@@ -205,7 +243,7 @@ mihomo_switch()
     fi
 
     API_URL=$(mihomo_api)
-    JSON=$(jq -n --arg n "$NAME" '{name:$n}' | tr -d '\r')
+    JSON=$(jq -cn --arg n "$NAME" '{name:$n}' | tr -d '\r')
     CODE=$(printf '%s' "$JSON" | curl -s -o /dev/null -w '%{http_code}' --max-time 3 \
         -X PUT \
         -H "Content-Type: application/json" \
@@ -214,7 +252,15 @@ mihomo_switch()
 
     if [ "$CODE" = "204" ] || [ "$CODE" = "200" ]
     then
-        echo "✅ 已切换至: $NAME"
+        DELAY=$(mihomo_delay "$NAME")
+        if [ -n "$DELAY" ]
+        then
+            echo "✅ 已切换至: $NAME
+📶 当前延迟: ${DELAY}ms"
+        else
+            echo "✅ 已切换至: $NAME
+📶 当前延迟: 超时"
+        fi
     else
         echo "❌ 切换失败（HTTP $CODE）：请确认节点名称是否正确"
     fi
