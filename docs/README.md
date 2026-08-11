@@ -1,513 +1,238 @@
-
----
-
 # TG Bot Platform
 
 <p align="center">
-<b>Telegram Bot Server Management Platform</b>
+<b>Telegram 服务器管理平台 · 一键部署 · 纯 Bash 实现</b>
 </p>
 
-一个基于 Debian Linux 的 Telegram 服务器管理平台。
-
-通过 Telegram Bot 实现远程服务器管理，包括系统状态监控、Mihomo 管理、Wake-on-LAN、自动备份、自动更新以及故障诊断。
-
-目标：
-
-> 让用户通过一条命令，在全新的 Debian 系统上完成 TG Bot 平台部署。
-
----
-
-# ✨ Features
-
-## 🚀 One-click Installation
-
-支持：
+一个基于 Debian Linux 的 Telegram 服务器管理平台。安装完成后，你只需要在 Telegram 里发消息，就能随时随地查看服务器状态、测速切换代理节点、查询服务端口、备份和更新机器人、远程开机等。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/install.sh | bash
 ```
 
-自动完成：
+---
 
-```
-环境检测
-    ↓
-依赖安装
-    ↓
-下载最新版本
-    ↓
-完整性校验
-    ↓
-程序部署
-    ↓
-首次配置
-    ↓
-服务启动
-```
+## ✨ 功能一览
+
+| 能力 | 说明 |
+| --- | --- |
+| 📊 系统状态总览 | CPU 使用率 / 温度 / 内存 / 磁盘 / 网络流量 / Docker 容器 / Mihomo 节点，一次看全 |
+| 🚀 代理节点测速 | 自动展开到最底层节点，并行测速，只显示可用节点（≤800ms） |
+| 🔀 一键切换节点 | `/switch 节点名`，切换后立刻报告新节点延迟 |
+| 🌐 服务端口查询 | 自动扫描 Docker 与非 Docker 程序的端口，直接给出局域网访问地址 |
+| 💾 自动备份 | 数据、配置定时备份，支持加密 |
+| 📦 版本检查与更新 | 查看当前/最新版本，确认后自动升级并保留配置，失败自动回滚 |
+| ⚡ WOL 远程唤醒 | 发送 Magic Packet，远程开机局域网设备 |
+| 🔔 自动监控报警 | CPU / 内存 / 磁盘 / Docker 异常自动推送 Telegram |
+| 🩺 诊断与自修复 | 一键诊断配置、服务、环境，并自动修复 |
+| 🛡️ 安全机制 | 管理员验证、危险操作二次确认、SHA256 校验、更新前自动备份 |
 
 ---
 
-# 🤖 Telegram Remote Management
+## 📸 功能展示
 
-通过 Telegram Bot 远程管理服务器。
+### 📊 服务器状态总览 `/status`
 
-支持：
-
-| Command     | Function     |
-| ----------- | ----------- |
-| `/status`   | 系统状态总览（CPU/温度/网络） |
-| `/ports`    | 查看服务端口      |
-| `/mihomo`   | 最底层节点测速     |
-| `/switch`   | 切换代理节点    |
-| `/wake`     | Wake-on-LAN |
-| `/backup`   | 数据备份        |
-| `/update`   | 版本检查与更新    |
-| `/reboot`   | 重启服务器       |
-| `/shutdown` | 关闭服务器       |
-
----
-
-# 🖥 System Management
-
-提供服务器基础管理能力：
-
-* CPU监控
-* 内存监控
-* 磁盘监控
-* 网络状态
-* Docker状态
-* Mihomo节点测速
-* 服务端口查询（/ports）
-
----
-
-# 🌐 Mihomo Management
-
-支持 Mihomo / Clash Meta 系列代理环境。
-
-支持：
-
-* Mihomo状态检测
-* 最底层节点并行测速（只显示连通且延迟 ≤800ms 的节点）
-* 一键切换代理节点（`/switch 节点名`）
-* 切换成功后显示新节点延迟
-
-切换节点模板（也可通过 `/help` 查看）：
+一条命令查看整台服务器的运行情况：
 
 ```text
-1. 发送 /mihomo 查看可用节点
-2. 复制一个节点名
-3. 发送 /switch 节点名
+📋 服务器状态汇报
 
-例如: /switch 美国-洛杉矶01
+🖥️ 主机: debian
+💻 系统: Debian GNU/Linux 13 (trixie)
+⏱️ 已持续运行: up 4 hours
+📊 CPU 使用率: 23% · 温度: 52°C
+🧠 内存: 2.0G / 3.3G（61%）
+💾 系统盘: 21%
+🗄️ 数据盘: 4%
+🌐 网络: 网卡: eth0 · 下载: 1.2G · 上传: 345M
+🐳 Docker: 6 个容器
+• alist : Up 3 hours
+• immich_server : Up 4 hours (healthy)
+🛰️ Mihomo: ✅ 已开启 · 当前节点: 美国-洛杉矶01 · 延迟: 120ms
 ```
 
-兼容：
+### 🚀 代理节点测速 `/mihomo`
 
+自动展开到最底层节点并并行测速，只保留**连通且延迟 ≤800ms** 的节点，按延迟从低到高排列，当前节点标 `▶`：
+
+```text
+🚀 Mihomo 可用节点（4 个）
+
+▶ 美国-洛杉矶01 — 120ms
+• 德国-法兰克福01 — 180ms
+• 共享节点 — 200ms
+• 美国-纽约02 — 350ms
 ```
-ShellCrash
-Mihomo Docker
-Clash Meta
+
+### 🔀 一键切换节点 `/switch`
+
+从 `/mihomo` 复制节点名，发送 `/switch 完整节点名` 即可切换，并立即反馈新节点延迟：
+
+```text
+✅ 已切换至: 美国-纽约02
+📶 当前延迟: 350ms
 ```
+
+> 新手不知道怎么发？发送 `/help`，里面有完整模板：先 `/mihomo` 看节点 → 复制名字 → `/switch 节点名`。
+
+### 🌐 局域网服务端口 `/ports`
+
+不用再记端口号。自动扫描 Docker 容器、非 Docker 程序（ss 扫描）和手动配置的服务，直接给出可点击的访问地址：
+
+```text
+🌐 局域网服务端口
+
+服务器IP: 192.168.1.30
+
+🐳 Docker:
+• alist — http://192.168.1.30:5244
+• immich_server — http://192.168.1.30:2283
+
+💻 其他程序:
+• Mihomo 面板 — http://192.168.1.30:9999
+• lucky — http://192.168.1.30:16601
+
+📝 手动配置:
+• qbittorrent — http://192.168.1.30:8080
+```
+
+未自动识别的服务可通过 `system.env` 里的 `PANEL_SERVICES="名称=端口"` 补充。
+
+### 📦 版本检查与更新 `/update`
+
+先对比版本，确认后再升级，升级过程自动完成下载、SHA256 校验、备份、覆盖、重启与回滚：
+
+```text
+📦 版本检查
+
+当前版本: v1.6.0
+最新版本: v1.7.0
+
+是否更新？
+再次发送 /update 确认更新。
+```
+
+### ⚡ 更多能力
+
+- `/wake` — 发送 WOL 唤醒包，远程开机局域网设备
+- `/backup` — 手动触发数据与配置备份
+- `/reboot`、`/shutdown` — 重启 / 关闭服务器（均需二次确认）
+- `/help` — 使用帮助与切换节点模板
 
 ---
 
-# ⚡ Wake-on-LAN
+## 📋 命令速查
 
-支持远程唤醒局域网设备。
-
-功能：
-
-* MAC地址管理
-* Magic Packet发送
-* Telegram远程开机
-
----
-
-# 💾 Backup System
-
-提供自动备份能力。
-
-支持：
-
-* 配置备份
-* 数据备份
-* 加密备份
-* 定时备份
+| 命令 | 功能 |
+| --- | --- |
+| `/status` | 系统状态总览（CPU/温度/内存/磁盘/网络/Docker/Mihomo） |
+| `/ports` | 查看各服务访问端口与局域网地址 |
+| `/mihomo` | 最底层节点测速（只显示可用节点） |
+| `/switch 节点名` | 切换代理节点并显示新节点延迟 |
+| `/wake` | 发送 WOL 唤醒包开机 |
+| `/backup` | 备份数据与配置 |
+| `/update` | 版本检查与更新机器人 |
+| `/reboot` | 重启服务器（二次确认） |
+| `/shutdown` | 关闭服务器（二次确认） |
+| `/help` | 使用帮助与切换节点模板 |
 
 ---
 
-# 🔄 Automatic Update
+## 🚀 快速开始
 
-内置版本管理系统。
+### 1. 一键安装
 
-更新流程：
+在全新的 Debian 服务器上执行：
 
-```
-检测最新版本
-
-        ↓
-
-下载 Release
-
-        ↓
-
-SHA256 校验
-
-        ↓
-
-创建备份
-
-        ↓
-
-升级程序
-
-        ↓
-
-恢复配置
-
-        ↓
-
-健康检查
-
+```bash
+curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/install.sh | bash
 ```
 
-支持：
+安装过程自动完成：
 
-* 自动更新
-* 更新回滚
-* 配置保留
+```text
+环境检测 → 依赖安装 → 下载最新版本 → 完整性校验 → 程序部署 → 首次配置 → 服务启动
+```
+
+### 2. 首次配置
+
+按提示填入：
+
+- Telegram Bot Token（找 [@BotFather](https://t.me/BotFather) 创建）
+- 管理员 Telegram ID
+- WOL 目标电脑 MAC（可选）
+- Mihomo API 地址（可选）
+
+### 3. 开始使用
+
+在 Telegram 里向机器人发送 `/help`，按模板操作即可。
 
 ---
 
-# 🩺 System Diagnosis
+## ⚙️ 配置说明
 
-提供自动诊断能力。
+配置文件位于 `/opt/tg_bot/config/`：
 
-检测：
-
-```
-Telegram配置
-
-Bot服务状态
-
-Docker环境
-
-Mihomo服务
-
-WOL配置
-
-磁盘空间
-
-内存状态
-
-Systemd Timer
-
-更新配置
-```
-
-同时提供自动修复：
-
-```
-依赖修复
-
-权限修复
-
-配置恢复
-
-服务重载
-
-Bot重启
-```
+| 文件 | 内容 |
+| --- | --- |
+| `user.env` | Telegram Token、管理员 ID、WOL MAC |
+| `device.env` | 服务器显示名称、系统名称、数据目录（留空自动检测） |
+| `system.env` | Mihomo API、Telegram 代理、更新地址、`PANEL_SERVICES` 手动服务端口 |
 
 ---
 
-# 🏗 Architecture
+## 🏗️ 架构
 
-项目采用模块化设计：
-
-```
+```text
 TG Bot Platform
-
-├── install.sh
-│
-│   一键安装入口
-│
-├── deploy/
-│
-│   部署系统
-│
+├── install.sh         一键安装入口
 ├── app/
-│
-│   核心业务程序
-│
-├── systemd/
-│
-│   Linux服务管理
-│
-├── scripts/
-│
-│   系统维护脚本
-│
-├── templates/
-│
-│   配置模板
-│
-├── tests/
-│
-│   自动测试
-│
-└── docs/
-    文档
+│   ├── tg_bot.sh      主程序（轮询 Telegram 消息）
+│   ├── core/          路由 / 安全 / 日志 / 模块加载
+│   ├── commands/      Telegram 命令处理
+│   ├── modules/       功能模块（Mihomo / 备份 / WOL / 更新等）
+│   ├── lib/           公共函数库
+│   └── services/      后台任务（监控 / 健康检查 / 定时调度）
+├── deploy/            部署 / 升级 / 诊断 / 修复 / 发布构建
+├── systemd/           Linux 服务与定时器
+├── scripts/           维护脚本
+├── templates/         配置模板
+├── tests/             自动测试
+├── VERSION            当前版本号
+└── release.json       Release 信息
+```
+
+Systemd 服务：
+
+```text
+tg_bot.service      Telegram Bot 主服务
+tg_monitor.timer    定时监控（资源超限自动报警）
+tg_backup.timer     定时备份
+tg_health.timer     定期健康检查
 ```
 
 ---
 
-# 📂 Directory Structure
+## 🔄 更新与发布流程
 
+```text
+检测最新版本 → 下载 Release → SHA256 校验 → 创建备份 → 升级程序 → 恢复配置 → 健康检查
 ```
-tg-bot-platform/
 
-├── app/
-│
-│   ├── tg_bot.sh
-│   │
-│   │   Telegram Bot 主程序入口
-│   │
-│   ├── core/
-│   │
-│   │   ├── loader.sh
-│   │   │   模块加载
-│   │   │
-│   │   ├── router.sh
-│   │   │   Telegram命令路由
-│   │   │
-│   │   ├── logger.sh
-│   │   │   日志系统
-│   │   │
-│   │   └── security.sh
-│   │       权限控制
-│   │
-│   ├── commands/
-│   │
-│   │   Telegram命令处理层
-│   │
-│   ├── modules/
-│   │
-│   │   系统功能模块
-│   │
-│   │   ├── system.sh
-│   │   │   系统操作
-│   │   │
-│   │   │
-│   │   ├── mihomo.sh
-│   │   │   Mihomo管理
-│   │   │
-│   │   ├── wol.sh
-│   │   │   Wake-on-LAN
-│   │   │
-│   │   └── backup.sh
-│   │       备份管理
-│   │
-│   ├── lib/
-│   │
-│   │   公共函数库
-│   │
-│   └── services/
-│
-│       后台服务任务
-│
-│
-├── deploy/
-│
-│   ├── deploy.sh
-│   │   部署程序
-│   │
-│   ├── first_setup.sh
-│   │   首次配置向导
-│   │
-│   ├── diagnose.sh
-│   │   系统诊断
-│   │
-│   ├── repair.sh
-│   │   自动修复
-│   │
-│   ├── updater.sh
-│   │   自动更新
-│   │
-│   └── release_build.sh
-│       Release构建
-│
-│
-├── systemd/
-│
-│   Linux服务文件
-│
-│
-├── scripts/
-│
-│   维护脚本
-│
-│
-├── templates/
-│
-│   配置模板
-│
-│
-├── tests/
-│
-│   测试工具
-│
-│
-├── VERSION
-│
-│   当前版本号
-│
-├── release.json
-│
-│   Release信息
-│
-└── install.sh
-    一键安装入口
+支持：
 
-```
+- 自动更新
+- 更新失败自动回滚
+- 配置与日志保留
+- GitHub Actions 自动检测（Bash 语法 / ShellCheck / 发布包 CRLF 校验）
 
 ---
 
-# ⚙️ Installation
+## 🔐 安全机制
 
-## Requirements
-
-推荐环境：
-
-```
-OS:
-Debian 11+
-
-Architecture:
-x86_64 / ARM64
-
-权限:
-root
-```
-
----
-
-## Install
-
-执行：
-
-```bash
-curl -fsSL \
-https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/install.sh \
-| bash
-```
-
-安装完成后：
-
-进入 Telegram：
-
-发送：
-
-```
-/start
-```
-
-即可开始管理服务器。
-
----
-
-# 🔧 Configuration
-
-首次安装自动生成：
-
-```
-/opt/tg_bot/config/
-```
-
-配置文件：
-
-```
-user.env
-
-Telegram相关配置
-
-
-device.env
-
-设备相关配置
-
-
-system.env
-
-系统配置
-```
-
----
-
-# 🛠 Management
-
-Systemd服务：
-
-```
-tg_bot.service
-
-tg_monitor.timer
-
-tg_backup.timer
-
-tg_health.timer
-```
-
-查看状态：
-
-```bash
-systemctl status tg_bot
-```
-
-重启：
-
-```bash
-systemctl restart tg_bot
-```
-
----
-
-# 🔐 Security
-
-安全机制：
-
-* Telegram管理员ID验证
-* 危险操作二次确认
-* 配置文件隔离
-* SHA256安装包验证
-* 更新前自动备份
-
----
-
-# 📦 Release Workflow
-
-开发流程：
-
-```
-Source Code
-
-↓
-
-Release Build
-
-↓
-
-SHA256 Generate
-
-↓
-
-GitHub Release
-
-↓
-
-One-click Installation
-
-```
-
----
+- 仅管理员 ID 可操作
+- 重启 / 关机 / 更新等危险操作需二次确认
+- 安装包 SHA256 完整性校验
+- 更新前自动备份，失败自动回滚
+- 配置文件与密钥隔离（`config/*.env` 不进入发布包）
