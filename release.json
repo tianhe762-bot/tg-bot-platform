@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "release_date": "2026-08-12",
-    "description": "v1.7.0 - grouped Mihomo node list by region, fixed phantom REJECT-DROP node and GLOBAL mispick in switch",
+    "description": "v1.7.1 - fuzzy node name matching in /switch (flag-prefix tolerant), multi-candidate hints",
     "author": "TG Bot"
 }

@@ -210,6 +210,23 @@ mihomo_switch_target_from()
 }
 
 
+# 查找包含指定节点的可切换组（优先当前手动选择组，其次非内置 Selector）
+mihomo_switch_find_group_from()
+{
+    local PROXIES="$1" NAME="$2" CURRENT
+
+    CURRENT=$(mihomo_switch_target_from "$PROXIES" "$(mihomo_pick_group_from "$PROXIES")")
+
+    echo "$PROXIES" | jq -r --arg n "$NAME" --arg c "$CURRENT" '
+        [ ( if $c != "" and (.proxies[$c].type == "Selector") and ((.proxies[$c].all // []) | index($n)) then $c else empty end ),
+          ( .proxies | to_entries[]
+            | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
+            | select(.value.type == "Selector" and ((.value.all // []) | index($n)))
+            | .key ) ]
+        | .[0] // empty' | tr -d '\r'
+}
+
+
 # /mihomo 使用：按区域组展示节点测速（只显示连通且延迟 ≤800ms 的节点）
 mihomo_nodes()
 {
@@ -358,7 +375,7 @@ $SECTIONS"
 mihomo_switch()
 {
     local NAME="$1"
-    local PROXIES MAIN CURRENT GROUP TYPE AUTO API_URL CODE DELAY JSON
+    local PROXIES GROUP TYPE AUTO API_URL CODE DELAY JSON MATCHES COUNT CANDIDATE
 
     PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
     if [ -z "$PROXIES" ]
@@ -367,17 +384,35 @@ mihomo_switch()
         return 0
     fi
 
-    MAIN=$(mihomo_pick_group_from "$PROXIES")
-    CURRENT=$(mihomo_switch_target_from "$PROXIES" "$MAIN")
+    GROUP=$(mihomo_switch_find_group_from "$PROXIES" "$NAME")
 
-    # 优先切换当前手动选择组，其次找第一个包含该节点的非内置 Selector 组
-    GROUP=$(echo "$PROXIES" | jq -r --arg n "$NAME" --arg c "$CURRENT" '
-        [ ( if $c != "" and (.proxies[$c].type == "Selector") and ((.proxies[$c].all // []) | index($n)) then $c else empty end ),
-          ( .proxies | to_entries[]
-            | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
-            | select(.value.type == "Selector" and ((.value.all // []) | index($n)))
-            | .key ) ]
-        | .[0] // empty' | tr -d '\r')
+    # 精确匹配失败时模糊匹配：节点名可能丢失了国旗前缀等
+    if [ -z "$GROUP" ]
+    then
+        MATCHES=$(echo "$PROXIES" | jq -r --arg n "$NAME" '
+            [ .proxies | to_entries[]
+              | select(.value.type as $t | ["Selector","URLTest","Fallback","LoadBalance","Relay","Direct","Reject","RejectDrop","Compatible","Pass","GLOBAL"] | index($t) | not)
+              | select((.key | ascii_downcase) | index(($n | ascii_downcase)))
+              | .key ]
+            | unique[]' | tr -d '\r')
+
+        COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l)
+        if [ "$COUNT" -eq 1 ]
+        then
+            NAME=$(printf '%s\n' "$MATCHES" | head -1)
+            GROUP=$(mihomo_switch_find_group_from "$PROXIES" "$NAME")
+        elif [ "$COUNT" -gt 1 ]
+        then
+            CANDIDATE=$(printf '%s\n' "$MATCHES" | head -1)
+            echo "❓ 找到多个匹配节点，请发送完整节点名：
+
+$(printf '%s\n' "$MATCHES" | head -10)
+
+例如:
+/switch $CANDIDATE"
+            return 0
+        fi
+    fi
 
     if [ -z "$GROUP" ]
     then
@@ -389,7 +424,7 @@ mihomo_switch()
         then
             echo "❌ 该节点位于自动选择组，无法手动切换"
         else
-            echo "❌ 未找到该节点，请确认名称是否正确"
+            echo "❌ 未找到该节点，请从 /mihomo 复制完整节点名（含国旗前缀）"
         fi
         return 0
     fi
