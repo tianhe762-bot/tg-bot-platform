@@ -349,6 +349,9 @@ mihomo_switch()
 {
     local NAME="$1"
     local PROXIES GROUP TYPE AUTO API_URL CODE DELAY JSON MATCHES COUNT CANDIDATE
+    local TMPDIR LEAF_EXACT D
+    local -a USABLE
+    local i
 
     PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
     if [ -z "$PROXIES" ]
@@ -357,35 +360,83 @@ mihomo_switch()
         return 0
     fi
 
-    GROUP=$(mihomo_switch_group_from "$PROXIES" "$NAME")
+    # 精确命中：节点名与叶子完全一致
+    LEAF_EXACT=$(echo "$PROXIES" | jq -r --arg n "$NAME" --arg t "$MIHOMO_GROUP_TYPES" '
+        [ .proxies | to_entries[]
+          | select(.key == $n)
+          | select(.value.type as $ty | ($t | split("|")) | index($ty) | not) ][0] // empty' | tr -d '\r')
 
-    # 精确匹配失败时模糊匹配：节点名可能丢失了国旗前缀等
-    if [ -z "$GROUP" ]
+    if [ -n "$LEAF_EXACT" ]
     then
-        MATCHES=$(echo "$PROXIES" | jq -r --arg n "$NAME" '
+        DELAY=$(mihomo_delay "$NAME")
+        if [ -z "$DELAY" ] || [ "$DELAY" -gt "$MIHOMO_DELAY_MAX" ]
+        then
+            echo "❌ 该节点当前不可用（延迟超过 800ms 或无法连通），请从 /mihomo 可用列表中选择"
+            return 0
+        fi
+    else
+        # 模糊候选：叶子中名称包含输入（忽略大小写）
+        MATCHES=$(echo "$PROXIES" | jq -r --arg n "$NAME" --arg t "$MIHOMO_GROUP_TYPES" '
             [ .proxies | to_entries[]
-              | select(.value.type as $t | ["Selector","URLTest","Fallback","LoadBalance","Relay","Direct","Reject","RejectDrop","Compatible","Pass","GLOBAL"] | index($t) | not)
+              | select(.value.type as $ty | ($t | split("|")) | index($ty) | not)
               | select((.key | ascii_downcase) | index(($n | ascii_downcase)))
               | .key ]
             | unique[]' | tr -d '\r')
 
         COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l)
-        if [ "$COUNT" -eq 1 ]
+        if [ "$COUNT" -eq 0 ]
         then
-            NAME=$(printf '%s\n' "$MATCHES" | head -1)
-            GROUP=$(mihomo_switch_group_from "$PROXIES" "$NAME")
-        elif [ "$COUNT" -gt 1 ]
+            echo "❌ 未找到可用的匹配节点，请从 /mihomo 可用列表中选择"
+            return 0
+        fi
+
+        # 并行测速候选，只保留可用（≤800ms）
+        TMPDIR=$(mktemp -d)
+        i=0
+        while IFS= read -r CANDIDATE
+        do
+            [ -z "$CANDIDATE" ] && continue
+            mihomo_delay "$CANDIDATE" > "$TMPDIR/$i" &
+            i=$((i + 1))
+        done <<< "$MATCHES"
+        wait
+
+        USABLE=()
+        i=0
+        while IFS= read -r CANDIDATE
+        do
+            [ -z "$CANDIDATE" ] && continue
+            D=$(cat "$TMPDIR/$i")
+            i=$((i + 1))
+            if [ -n "$D" ] && [ "$D" -le "$MIHOMO_DELAY_MAX" ]
+            then
+                USABLE+=("$CANDIDATE")
+            fi
+        done <<< "$MATCHES"
+        rm -rf "$TMPDIR"
+
+        if [ "${#USABLE[@]}" -eq 0 ]
         then
-            CANDIDATE=$(printf '%s\n' "$MATCHES" | head -1)
+            echo "❌ 未找到可用的匹配节点（匹配到的节点当前都不可用），请从 /mihomo 可用列表中选择"
+            return 0
+        fi
+
+        if [ "${#USABLE[@]}" -eq 1 ]
+        then
+            NAME="${USABLE[0]}"
+        else
+            CANDIDATE="${USABLE[0]}"
             echo "❓ 找到多个匹配节点，请发送完整节点名：
 
-$(printf '%s\n' "$MATCHES" | head -10)
+$(printf '%s\n' "${USABLE[@]}" | head -10)
 
 例如:
 /switch $CANDIDATE"
             return 0
         fi
     fi
+
+    GROUP=$(mihomo_switch_group_from "$PROXIES" "$NAME")
 
     if [ -z "$GROUP" ]
     then
