@@ -45,10 +45,6 @@ telegram_set_commands()
 {
     local COMMANDS_JSON='[
         {"command":"status","description":"查看系统运行状态"},
-        {"command":"cpu","description":"查看 CPU 负载"},
-        {"command":"memory","description":"查看内存使用率"},
-        {"command":"disk","description":"查看磁盘空间"},
-        {"command":"docker","description":"Docker 容器管理"},
         {"command":"mihomo","description":"Mihomo 代理状态"},
         {"command":"wake","description":"发送 WOL 唤醒包"},
         {"command":"backup","description":"数据及配置备份"},

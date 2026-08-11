@@ -9,7 +9,7 @@
 
 一个基于 Debian Linux 的 Telegram 服务器管理平台。
 
-通过 Telegram Bot 实现远程服务器管理，包括系统监控、Docker 管理、Mihomo 管理、Wake-on-LAN、自动备份、自动更新以及故障诊断。
+通过 Telegram Bot 实现远程服务器管理，包括系统状态监控、Mihomo 管理、Wake-on-LAN、自动备份、自动更新以及故障诊断。
 
 目标：
 
@@ -53,19 +53,15 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 
 支持：
 
-| Command     | Function    |
+| Command     | Function     |
 | ----------- | ----------- |
-| `/status`   | 查看系统状态      |
-| `/cpu`      | CPU信息       |
-| `/memory`   | 内存信息        |
-| `/disk`     | 磁盘信息        |
-| `/docker`   | Docker管理    |
-| `/mihomo`   | Mihomo管理    |
-| `/wake`     | Wake-on-LAN |
-| `/backup`   | 数据备份        |
-| `/update`   | 系统更新        |
-| `/reboot`   | 重启服务器       |
-| `/shutdown` | 关闭服务器       |
+| `/status`   | 查看系统状态      |
+| `/mihomo`   | Mihomo管理    |
+| `/wake`     | Wake-on-LAN |
+| `/backup`   | 数据备份        |
+| `/update`   | 系统更新        |
+| `/reboot`   | 重启服务器       |
+| `/shutdown` | 关闭服务器       |
 
 ---
 
@@ -291,8 +287,6 @@ tg-bot-platform/
 │   │   ├── system.sh
 │   │   │   系统操作
 │   │   │
-│   │   ├── docker.sh
-│   │   │   Docker管理
 │   │   │
 │   │   ├── mihomo.sh
 │   │   │   Mihomo管理

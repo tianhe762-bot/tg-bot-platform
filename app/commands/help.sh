@@ -14,9 +14,6 @@ telegram_send "$CHAT_ID" \
 
 基础:
 /status
-/disk
-/memory
-/cpu
 /network
 
 
@@ -29,7 +26,6 @@ telegram_send "$CHAT_ID" \
 
 
 服务:
-/docker
 /mihomo
 /wake
 /backup
