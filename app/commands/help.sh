@@ -27,6 +27,7 @@ telegram_send "$CHAT_ID" \
 
 服务:
 /mihomo
+/switch
 /wake
 /backup
 /logs

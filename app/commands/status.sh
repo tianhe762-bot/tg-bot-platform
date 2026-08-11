@@ -78,9 +78,7 @@ DOCKER_COUNT=$(printf '%s\n' "$DOCKER_LIST" | grep -c '^•' || true)
 DOCKER_COUNT=${DOCKER_COUNT:-0}
 
 
-MIHOMO=$(curl -s \
---max-time 2 \
-"${MIHOMO_API:-http://127.0.0.1:9999}/version")
+MIHOMO=$(mihomo_connected)
 
 
 TEXT="

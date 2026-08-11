@@ -45,7 +45,8 @@ telegram_set_commands()
 {
     local COMMANDS_JSON='[
         {"command":"status","description":"查看系统运行状态"},
-        {"command":"mihomo","description":"Mihomo 代理状态"},
+        {"command":"mihomo","description":"Mihomo 节点与测速"},
+        {"command":"switch","description":"切换代理节点"},
         {"command":"wake","description":"发送 WOL 唤醒包"},
         {"command":"backup","description":"数据及配置备份"},
         {"command":"update","description":"版本检查与更新"},
