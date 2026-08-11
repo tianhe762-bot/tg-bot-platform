@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 ```text
 📋 服务器状态汇报
 
-🖥️ 主机: debian
+🖥️ 主机: my-server
 💻 系统: Debian GNU/Linux 13 (trixie)
 ⏱️ 已持续运行: up 4 hours
 📊 CPU 使用率: 23% · 温度: 52°C
@@ -47,9 +47,9 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 🗄️ 数据盘: 4%
 🌐 网络: 网卡: eth0 · 下载: 1.2G · 上传: 345M
 🐳 Docker: 6 个容器
-• alist : Up 3 hours
-• immich_server : Up 4 hours (healthy)
-🛰️ Mihomo: ✅ 已开启 · 当前节点: 美国-洛杉矶01 · 延迟: 120ms
+• 网盘 : Up 3 hours
+• 相册 : Up 4 hours (healthy)
+🛰️ Mihomo: ✅ 已开启 · 当前节点: 节点-香港01 · 延迟: 120ms
 ```
 
 ### 🚀 代理节点测速 `/mihomo`
@@ -59,10 +59,10 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 ```text
 🚀 Mihomo 可用节点（4 个）
 
-▶ 美国-洛杉矶01 — 120ms
-• 德国-法兰克福01 — 180ms
+▶ 节点-香港01 — 120ms
+• 节点-日本02 — 180ms
 • 共享节点 — 200ms
-• 美国-纽约02 — 350ms
+• 节点-新加坡03 — 350ms
 ```
 
 ### 🔀 一键切换节点 `/switch`
@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 从 `/mihomo` 复制节点名，发送 `/switch 完整节点名` 即可切换，并立即反馈新节点延迟：
 
 ```text
-✅ 已切换至: 美国-纽约02
+✅ 已切换至: 节点-新加坡03
 📶 当前延迟: 350ms
 ```
 
@@ -83,18 +83,18 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 ```text
 🌐 局域网服务端口
 
-服务器IP: 192.168.1.30
+服务器IP: 192.168.1.100
 
 🐳 Docker:
-• alist — http://192.168.1.30:5244
-• immich_server — http://192.168.1.30:2283
+• 网盘 — http://192.168.1.100:5244
+• 相册 — http://192.168.1.100:2283
 
 💻 其他程序:
-• Mihomo 面板 — http://192.168.1.30:9999
-• lucky — http://192.168.1.30:16601
+• Mihomo 面板 — http://192.168.1.100:9999
+• 面板 — http://192.168.1.100:16601
 
 📝 手动配置:
-• qbittorrent — http://192.168.1.30:8080
+• 下载器 — http://192.168.1.100:8080
 ```
 
 未自动识别的服务可通过 `system.env` 里的 `PANEL_SERVICES="名称=端口"` 补充。
