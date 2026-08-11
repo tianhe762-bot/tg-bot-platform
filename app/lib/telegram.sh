@@ -1,13 +1,38 @@
 #!/bin/bash
 
 
+# Telegram API 请求：优先走代理（TG_PROXY），代理不可用时自动直连
+telegram_curl()
+{
+    local args=("$@")
+    local out
+    local rc
+
+    if [ -n "${TG_PROXY:-}" ]; then
+        out=$(curl "${args[@]}" \
+            --proxy "$TG_PROXY" \
+            --connect-timeout 5 \
+            --max-time 30 \
+            --fail \
+            2>/dev/null)
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            printf '%s' "$out"
+            return 0
+        fi
+    fi
+
+    curl "${args[@]}"
+}
+
+
 telegram_send()
 {
     local CHAT_ID="$1"
     local TEXT="$2"
 
 
-    curl -s \
+    telegram_curl -s \
         -X POST \
         "$API/sendMessage" \
         --data-urlencode "chat_id=$CHAT_ID" \
@@ -32,7 +57,7 @@ telegram_set_commands()
     ]'
 
 
-    curl -s -X POST \
+    telegram_curl -s -X POST \
         "$API/setMyCommands" \
         -H "Content-Type: application/json" \
         -d "{\"commands\":$COMMANDS_JSON}" \

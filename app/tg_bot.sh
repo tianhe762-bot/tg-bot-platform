@@ -68,13 +68,15 @@ while true; do
     OFFSET=${OFFSET:-0}
 
 
-    RESULT=$(curl -s \
+    RESULT=$(telegram_curl -s \
         --connect-timeout 10 \
         --max-time 40 \
         "$API/getUpdates?timeout=30&offset=$OFFSET" || true)
 
 
     COUNT=$(echo "$RESULT" | jq '.result | length' 2>/dev/null || echo 0)
+    COUNT=${COUNT:-0}
+    case "$COUNT" in *[!0-9]*) COUNT=0;; esac
 
 
     if [ "$COUNT" -gt 0 ]; then
