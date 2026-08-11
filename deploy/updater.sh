@@ -119,6 +119,7 @@ rsync -av --delete \
     --exclude="config/*.env" \
     --exclude="logs/" \
     --exclude="backups/" \
+    --exclude="data/update_offset" \
     "$SOURCE/" "$INSTALL_DIR/"
 
 echo "✅ 文件更新完成"
