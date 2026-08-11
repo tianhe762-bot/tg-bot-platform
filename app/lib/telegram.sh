@@ -30,14 +30,17 @@ telegram_send()
 {
     local CHAT_ID="$1"
     local TEXT="$2"
+    local RESP
 
-
-    telegram_curl -s \
+    RESP=$(telegram_curl -s \
         -X POST \
         "$API/sendMessage" \
         --data-urlencode "chat_id=$CHAT_ID" \
-        --data-urlencode "text=$TEXT" \
-        >/dev/null 2>&1 || true
+        --data-urlencode "text=$TEXT" 2>/dev/null)
+    if printf '%s' "$RESP" | grep -q '"ok":true'; then
+        return 0
+    fi
+    return 1
 }
 
 
@@ -51,7 +54,8 @@ telegram_set_commands()
         {"command":"wake","description":"发送 WOL 唤醒包"},
         {"command":"backup","description":"数据及配置备份"},
         {"command":"update","description":"版本检查与更新"},
-        {"command":"help","description":"查看使用帮助与说明"}
+        {"command":"help","description":"查看使用帮助与说明"},
+        {"command":"watchdog","description":"看门狗管理（开启/关闭）"}
     ]'
 
 

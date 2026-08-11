@@ -24,6 +24,8 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 | 📦 版本检查与更新 | 查看当前/最新版本，确认后自动升级并保留配置，失败自动回滚 |
 | ⚡ WOL 远程唤醒 | 发送 Magic Packet，远程开机局域网设备 |
 | 🔔 自动监控报警 | CPU / 内存 / 磁盘 / Docker 异常自动推送 Telegram |
+| 🐶 看门狗管理 | `/watchdog` 命令与本地面板开关自愈看门狗，可扩展多个看门狗 |
+| 📲 国内推送兜底 | Telegram 不可达时自动转推企业微信 / Server酱 |
 | 🩺 诊断与自修复 | 一键诊断配置、服务、环境，并自动修复 |
 | 🛡️ 安全机制 | 管理员验证、危险操作二次确认、SHA256 校验、更新前自动备份 |
 
@@ -136,6 +138,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 | `/reboot` | 重启服务器（二次确认） |
 | `/shutdown` | 关闭服务器（二次确认） |
 | `/help` | 使用帮助与切换节点模板 |
+| `/watchdog` | 看门狗管理（开启/关闭） |
 
 ---
 

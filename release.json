@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "1.8.1",
+    "version": "2.0.0",
     "release_date": "2026-08-12",
-    "description": "v1.8.1 - /switch only allows switching currently available nodes (delay <=800ms verified at switch time)",
+    "description": "v2.0.0 - Watchdog management (/watchdog command + manager panel), ShellCrash self-heal watchdog, domestic push fallback (WeCom/ServerChan), hdparm standby support",
     "author": "TG Bot"
 }

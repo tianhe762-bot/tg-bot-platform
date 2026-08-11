@@ -111,6 +111,23 @@ while true; do
 
 
             log_command "$USER_ID" "$CMD" 2>/dev/null || true
+
+            # 菜单状态：纯数字回复路由到上一个未过期菜单（如 /watchdog）
+            if [[ "$TEXT" =~ ^[0-9]+$ ]]; then
+                MENU_STATE="$DATA/menu_state"
+                if [ -f "$MENU_STATE" ]; then
+                    MENU_ENTRY=$(grep "^${CHAT_ID}|" "$MENU_STATE" 2>/dev/null | tail -1)
+                    if [ -n "$MENU_ENTRY" ]; then
+                        MENU_TS=$(printf '%s' "$MENU_ENTRY" | cut -d'|' -f3)
+                        MENU_CMD=$(printf '%s' "$MENU_ENTRY" | cut -d'|' -f2)
+                        if [ -n "$MENU_TS" ] && [ $(( $(date +%s) - MENU_TS )) -lt 300 ]; then
+                            route_command "$MENU_CMD" "$CHAT_ID" "$TEXT" 2>&1 || true
+                            continue
+                        fi
+                        sed -i "/^${CHAT_ID}|/d" "$MENU_STATE" 2>/dev/null || true
+                    fi
+                fi
+            fi
             
             # 捕获执行过程中的异常，防止任何报错破坏主循环
             route_command "$CMD" "$CHAT_ID" "$ARGS" 2>&1 || true

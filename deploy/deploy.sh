@@ -90,6 +90,8 @@ echo "[4/7] 初始化配置文件..."
 [ ! -f "$TARGET/config/system.env" ] && [ -f "$TARGET/templates/system.env.example" ] && cp "$TARGET/templates/system.env.example" "$TARGET/config/system.env"
 [ ! -f "$TARGET/config/system.env" ] && touch "$TARGET/config/system.env"
 
+[ ! -f "$TARGET/config/watchdogs.conf" ] && [ -f "$TARGET/templates/watchdogs.conf.example" ] && cp "$TARGET/templates/watchdogs.conf.example" "$TARGET/config/watchdogs.conf"
+
 chmod 600 "$TARGET/config/user.env" "$TARGET/config/device.env" "$TARGET/config/system.env"
 echo "✅ 配置初始化完成"
 
@@ -125,7 +127,7 @@ if systemctl list-unit-files tg_bot.service >/dev/null 2>&1; then
     systemctl enable tg_bot.service >/dev/null 2>&1 || true
 fi
 
-for TIMER in tg_monitor.timer tg_health.timer tg_backup.timer; do
+for TIMER in tg_monitor.timer tg_health.timer tg_backup.timer tg_shellcrash_watchdog.timer; do
     if systemctl list-unit-files "$TIMER" >/dev/null 2>&1; then
         systemctl enable "$TIMER" >/dev/null 2>&1 || true
     fi

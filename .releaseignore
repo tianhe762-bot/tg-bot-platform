@@ -1,6 +1,7 @@
 backups/
 logs/
 config/*.env
+config/watchdogs.conf
 tests/tmp/
 *.log
 *.tmp

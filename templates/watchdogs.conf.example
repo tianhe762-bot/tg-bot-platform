@@ -1,0 +1,2 @@
+# Watchdog registry: name|systemd timer|description
+shellcrash|tg_shellcrash_watchdog.timer|ShellCrash 自愈看门狗

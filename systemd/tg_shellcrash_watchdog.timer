@@ -1,0 +1,10 @@
+[Unit]
+Description=ShellCrash Watchdog Timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=tg_shellcrash_watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -28,6 +28,7 @@ telegram_send "$CHAT_ID" \
 
 ℹ️ 其他:
 /help — 显示本帮助
+/watchdog — 看门狗管理（开启/关闭）
 
 
 🔀 切换节点模板:

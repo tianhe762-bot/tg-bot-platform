@@ -15,6 +15,7 @@ BACKUP_DIR="$ROOT/backups"
 
 mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$BACKUP_DIR"
 
+source "$ROOT/app/lib/watchdogs.sh" 2>/dev/null || true
 
 pause() {
     echo
@@ -624,6 +625,117 @@ status_menu() {
     pause
 }
 
+watchdog_menu() {
+    while true; do
+        header
+        echo "看门狗管理"
+        echo
+        while IFS='|' read -r IDX NAME DESC STATE TIMER; do
+            if [ "$STATE" = "enabled" ]; then
+                echo "  $IDX. $DESC — ✅已开启"
+            else
+                echo "  $IDX. $DESC — ⭕已关闭"
+            fi
+        done < <(watchdogs_list)
+        echo "  0. 返回"
+        echo
+        read -rp "请输入编号切换开/关: " CHOICE
+        case "$CHOICE" in
+            0) return ;;
+            *)
+                if [[ "$CHOICE" =~ ^[0-9]+$ ]]; then
+                    NAME=$(watchdog_name_by_index "$CHOICE")
+                    if [ -n "$NAME" ]; then
+                        watchdog_toggle "$NAME"
+                        pause
+                    else
+                        echo "❌ 无效编号"
+                        sleep 1
+                    fi
+                else
+                    echo "❌ 无效输入"
+                    sleep 1
+                fi
+                ;;
+        esac
+    done
+}
+
+push_config() {
+    local FILE="$CONFIG_DIR/system.env"
+    source "$FILE" 2>/dev/null || true
+
+    while true; do
+        header
+        echo "国内推送兜底配置（Telegram 不可达时自动切换）"
+        echo
+        echo "说明：专为「家里没有软路由、靠本机科学上网」的环境设计。"
+        echo "当科学上网出现异常、无法连接 Telegram 的特殊情况下，"
+        echo "本通道作为备用通知路径，把关键告警推送到企业微信 / Server酱。"
+        echo
+        WECOM_CURRENT=$(get_env "$FILE" "WECOM_WEBHOOK")
+        SCT_CURRENT=$(get_env "$FILE" "SCT_KEY")
+        if [ -n "$WECOM_CURRENT" ]; then
+            echo "企业微信 webhook: 已配置（${#WECOM_CURRENT} 字符）"
+        else
+            echo "企业微信 webhook: 未配置"
+        fi
+        if [ -n "$SCT_CURRENT" ]; then
+            echo "Server酱 SendKey: 已配置（${#SCT_CURRENT} 字符）"
+        else
+            echo "Server酱 SendKey: 未配置"
+        fi
+        echo
+        echo "1. 设置企业微信群机器人 webhook"
+        echo "2. 设置 Server酱 SendKey"
+        echo "3. 发送测试消息"
+        echo "4. 清除企业微信 webhook"
+        echo "5. 清除 Server酱 SendKey"
+        echo "0. 返回"
+        echo
+        read -rp "请选择: " CHOICE
+        case "$CHOICE" in
+            1)
+                read -rp "请输入企业微信群机器人 webhook 完整地址（留空取消）: " WEBHOOK
+                if [ -n "$WEBHOOK" ]; then
+                    set_env "$FILE" "WECOM_WEBHOOK" "$WEBHOOK"
+                    echo "✅ 企业微信 webhook 已保存"
+                else
+                    echo "已取消"
+                fi
+                ;;
+            2)
+                read -rp "请输入 Server酱 SendKey（留空取消）: " SCT
+                if [ -n "$SCT" ]; then
+                    set_env "$FILE" "SCT_KEY" "$SCT"
+                    echo "✅ Server酱 SendKey 已保存"
+                else
+                    echo "已取消"
+                fi
+                ;;
+            3)
+                source "$ROOT/app/lib/push.sh" 2>/dev/null || true
+                source "$FILE" 2>/dev/null || true
+                if send_fallback "🧪 国内推送测试：如果你看到这条消息，说明兜底通道配置正确。"; then
+                    echo "✅ 测试消息已发送"
+                else
+                    echo "❌ 发送失败，请检查配置"
+                fi
+                ;;
+            4)
+                set_env "$FILE" "WECOM_WEBHOOK" ""
+                echo "✅ 已清除企业微信 webhook"
+                ;;
+            5)
+                set_env "$FILE" "SCT_KEY" ""
+                echo "✅ 已清除 Server酱 SendKey"
+                ;;
+            0) return ;;
+            *) echo "无效选项"; sleep 1 ;;
+        esac
+        pause
+    done
+}
 
 main_menu() {
     while true; do
@@ -642,6 +754,8 @@ main_menu() {
         echo "11. 系统诊断"
         echo "12. 一键修复"
         echo "13. 一键卸载"
+        echo "14. 看门狗管理"
+        echo "15. 国内推送配置"
         echo
         echo "0. 退出"
         echo
@@ -673,6 +787,8 @@ main_menu() {
                 fi
                 pause
                 ;;
+            14) watchdog_menu ;;
+            15) push_config ;;
             0) clear; exit 0 ;;
             *) echo "无效选项"; sleep 1 ;;
         esac
