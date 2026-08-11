@@ -13,6 +13,7 @@ telegram_send "$CHAT_ID" \
 
 🖥️ 系统状态:
 /status — 服务器状态总览（CPU使用率/温度/内存/磁盘/Docker/网络/Mihomo节点）
+/ports — 查看各服务访问端口（Docker/其他程序/手动配置）
 /update — 检查版本并更新机器人
 /backup — 备份数据与配置
 /reboot — 重启服务器（需二次确认）

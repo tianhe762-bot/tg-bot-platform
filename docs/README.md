@@ -56,6 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 | Command     | Function     |
 | ----------- | ----------- |
 | `/status`   | 系统状态总览（CPU/温度/网络） |
+| `/ports`    | 查看服务端口      |
 | `/mihomo`   | 最底层节点测速     |
 | `/switch`   | 切换代理节点    |
 | `/wake`     | Wake-on-LAN |
@@ -76,6 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 * 网络状态
 * Docker状态
 * Mihomo节点测速
+* 服务端口查询（/ports）
 
 ---
 

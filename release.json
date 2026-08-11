@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "release_date": "2026-08-12",
-    "description": "v1.5.0 - unified status with CPU usage/temp/network, leaner command set, switch template in help, current-node leaf fix",
+    "description": "v1.6.0 - new /ports command listing Docker, non-Docker and manual service ports with LAN URLs",
     "author": "TG Bot"
 }
