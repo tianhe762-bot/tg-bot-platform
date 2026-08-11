@@ -89,8 +89,15 @@ fi
 
 # 解压新文件
 tar -xzf "$PACKAGE" -C "$EXTRACT"
-SOURCE=$(find "$EXTRACT" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-[ -z "$SOURCE" ] && SOURCE="$EXTRACT"
+
+# 兼容两种包结构：带顶层目录的压缩包取其目录，平铺压缩包直接用解压根目录
+ENTRIES=$(find "$EXTRACT" -mindepth 1 -maxdepth 1 | wc -l)
+TOP_DIR=$(find "$EXTRACT" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+if [ "$ENTRIES" -eq 1 ] && [ -d "$TOP_DIR" ]; then
+    SOURCE="$TOP_DIR"
+else
+    SOURCE="$EXTRACT"
+fi
 
 # 1. 备份当前版本
 BACKUP_TAG="$(date +%Y%m%d_%H%M%S)"
