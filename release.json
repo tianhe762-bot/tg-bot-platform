@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "1.7.1",
+    "version": "1.8.0",
     "release_date": "2026-08-12",
-    "description": "v1.7.1 - fuzzy node name matching in /switch (flag-prefix tolerant), multi-candidate hints",
+    "description": "v1.8.0 - name-free generic Mihomo logic: flat node list, real traffic node, structural switch targeting",
     "author": "TG Bot"
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Mihomo Module
+# Mihomo Module（通用版：不依赖任何组名/配置结构）
 # ============================================================
 
 
@@ -28,41 +28,45 @@ mihomo_uri()
 }
 
 
-# 从 /proxies JSON 中选取主节点组：
-# 排除内置组，优先匹配常见组名，其次第一个 Selector，再第一个 URLTest
-mihomo_pick_group_from()
+# 获取最底层节点（过滤组/内置类型并去重）
+mihomo_leaf_nodes_from()
 {
     local PROXIES="$1"
 
-    echo "$PROXIES" | jq -r '
+    echo "$PROXIES" | jq -r --arg t "$MIHOMO_GROUP_TYPES" '
         [ .proxies | to_entries[]
-          | select(.value.type == "Selector" or .value.type == "URLTest")
+          | select(.value.type as $ty | ($t | split("|")) | index($ty) | not)
+          | .key ]
+        | unique[]' | tr -d '\r'
+}
+
+
+mihomo_leaf_nodes()
+{
+    mihomo_leaf_nodes_from "$(curl -s --max-time 3 "$(mihomo_api)/proxies")"
+}
+
+
+# 主组识别（纯结构、无名字）：
+# 优先 Selector，其次包含子组最多的组，再其次叶子最多的组
+mihomo_main_group_from()
+{
+    local PROXIES="$1"
+
+    echo "$PROXIES" | jq -r --arg t "$MIHOMO_GROUP_TYPES" '
+        . as $p |
+        [ $p.proxies | to_entries[]
+          | select(.value.type == "Selector" or .value.type == "URLTest" or .value.type == "Fallback" or .value.type == "LoadBalance")
           | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
-          | { key: .key, type: .value.type } ] as $g
-        | ( $g | map(select(.key | test("proxy|节点选择|选择|手动选择|global|全局"; "i"))) | .[0].key )
-        // ( $g | map(select(.type == "Selector")) | .[0].key )
-        // ( $g | map(select(.type == "URLTest")) | .[0].key )
-        // empty' | tr -d '\r'
+          | { key: .key, type: .value.type,
+              leaves: ([ .value.all[]? as $n | select(($p.proxies[$n].type // "") as $ty | ($t | split("|")) | index($ty) | not) | $n ] | length),
+              groups: ([ .value.all[]? as $n | select(($p.proxies[$n].type // "") as $ty | ($t | split("|")) | index($ty)) | $n ] | length) } ] as $g
+        | ( $g | sort_by(if .type == "Selector" then 0 else 1 end, -.groups, -.leaves) | .[0].key ) // empty' | tr -d '\r'
 }
 
 
-mihomo_pick_group()
-{
-    mihomo_pick_group_from "$(curl -s --max-time 3 "$(mihomo_api)/proxies")"
-}
-
-
-# 获取主节点组类型（Selector=可手动切换）
-mihomo_group_type_from()
-{
-    local PROXIES="$1" GROUP="$2"
-
-    echo "$PROXIES" | jq -r --arg g "$GROUP" '.proxies[$g].type // empty' | tr -d '\r'
-}
-
-
-# 获取当前选中节点
-mihomo_current_node_from()
+# 获取组当前选中项
+mihomo_group_now_from()
 {
     local PROXIES="$1" GROUP="$2"
 
@@ -70,13 +74,7 @@ mihomo_current_node_from()
 }
 
 
-mihomo_current_node()
-{
-    mihomo_current_node_from "$(curl -s --max-time 3 "$(mihomo_api)/proxies")" "$1"
-}
-
-
-# 递归解析到最底层节点（如 子组 → 叶子节点）
+# 递归解析到最底层节点（沿 now 链）
 mihomo_resolve_leaf_from()
 {
     local PROXIES="$1" NAME="$2" TYPE NOW
@@ -104,28 +102,41 @@ mihomo_resolve_leaf_from()
 }
 
 
-mihomo_resolve_leaf()
+# 真实当前节点：优先 /connections 链路首元素（完全无组名依赖）
+mihomo_real_node()
 {
-    mihomo_resolve_leaf_from "$(curl -s --max-time 3 "$(mihomo_api)/proxies")" "$1"
+    local RAW NODE
+
+    RAW=$(curl -s --max-time 3 "$(mihomo_api)/connections")
+    [ -z "$RAW" ] && return 0
+
+    NODE=$(echo "$RAW" | jq -r '
+        [ .connections[]? | select((.chains // []) | length > 0) | .chains[0]
+          | select(. != "DIRECT" and . != "REJECT" and . != "REJECT-DROP" and . != "GLOBAL" and . != "PASS") ][0] // empty' | tr -d '\r')
+
+    if [ -z "$NODE" ]
+    then
+        NODE=$(echo "$RAW" | jq -r '.connections[]? | select((.chains // []) | length > 0) | .chains[0]' | head -1 | tr -d '\r')
+    fi
+
+    echo "$NODE"
 }
 
 
-# 获取最底层节点（过滤组/内置类型并去重）
-mihomo_leaf_nodes_from()
+# 当前节点：真实链路优先，无活跃连接时回退主组链解析
+mihomo_current_node_effective()
 {
-    local PROXIES="$1"
+    local PROXIES="$1" NODE MAIN
 
-    echo "$PROXIES" | jq -r --arg t "$MIHOMO_GROUP_TYPES" '
-        [ .proxies | to_entries[]
-          | select(.value.type as $ty | ($t | split("|")) | index($ty) | not)
-          | .key ]
-        | unique[]' | tr -d '\r'
-}
+    NODE=$(mihomo_real_node)
+    if [ -z "$NODE" ]
+    then
+        MAIN=$(mihomo_main_group_from "$PROXIES")
+        NODE=$(mihomo_group_now_from "$PROXIES" "$MAIN")
+        NODE=$(mihomo_resolve_leaf_from "$PROXIES" "$NODE")
+    fi
 
-
-mihomo_leaf_nodes()
-{
-    mihomo_leaf_nodes_from "$(curl -s --max-time 3 "$(mihomo_api)/proxies")"
+    echo "$NODE"
 }
 
 
@@ -142,23 +153,19 @@ mihomo_delay()
 }
 
 
-# /status 使用：汇报当前节点与延迟
+# /status 使用：汇报真实当前节点与延迟
 mihomo_connected()
 {
-    local PROXIES GROUP NODE DELAY
+    local PROXIES NODE DELAY
 
     PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
     [ -z "$PROXIES" ] && { echo "❌ 未开启"; return 0; }
 
-    GROUP=$(mihomo_pick_group_from "$PROXIES")
-    [ -z "$GROUP" ] && { echo "❌ 未开启"; return 0; }
-
-    NODE=$(mihomo_current_node_from "$PROXIES" "$GROUP")
-    NODE=$(mihomo_resolve_leaf_from "$PROXIES" "$NODE")
+    NODE=$(mihomo_current_node_effective "$PROXIES")
 
     if [ -z "$NODE" ]
     then
-        echo "✅ 已开启 · 节点组: $GROUP"
+        echo "✅ 已开启"
         return 0
     fi
 
@@ -179,60 +186,12 @@ mihomo_connected()
 }
 
 
-# 沿主组 now 链找到当前手动选择组（最后的 Selector 组）
-mihomo_switch_target_from()
-{
-    local PROXIES="$1" NAME="$2" TYPE NOW TARGET
-    local -i DEPTH=0
-
-    [ -z "$NAME" ] && return 0
-
-    while [ "$DEPTH" -lt 10 ]
-    do
-        TYPE=$(echo "$PROXIES" | jq -r --arg n "$NAME" '.proxies[$n].type // empty' | tr -d '\r')
-        case "$TYPE" in
-            Selector)
-                TARGET="$NAME"
-                ;;
-            URLTest|Fallback|LoadBalance|Relay|Compatible)
-                ;;
-            *)
-                break
-                ;;
-        esac
-        NOW=$(echo "$PROXIES" | jq -r --arg n "$NAME" '.proxies[$n].now // empty' | tr -d '\r')
-        [ -z "$NOW" ] && break
-        NAME="$NOW"
-        DEPTH=$((DEPTH + 1))
-    done
-
-    echo "$TARGET"
-}
-
-
-# 查找包含指定节点的可切换组（优先当前手动选择组，其次非内置 Selector）
-mihomo_switch_find_group_from()
-{
-    local PROXIES="$1" NAME="$2" CURRENT
-
-    CURRENT=$(mihomo_switch_target_from "$PROXIES" "$(mihomo_pick_group_from "$PROXIES")")
-
-    echo "$PROXIES" | jq -r --arg n "$NAME" --arg c "$CURRENT" '
-        [ ( if $c != "" and (.proxies[$c].type == "Selector") and ((.proxies[$c].all // []) | index($n)) then $c else empty end ),
-          ( .proxies | to_entries[]
-            | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
-            | select(.value.type == "Selector" and ((.value.all // []) | index($n)))
-            | .key ) ]
-        | .[0] // empty' | tr -d '\r'
-}
-
-
-# /mihomo 使用：按区域组展示节点测速（只显示连通且延迟 ≤800ms 的节点）
+# /mihomo 使用：平铺列出最底层节点与测速（不出现任何组名）
 mihomo_nodes()
 {
-    local PROXIES GROUP NODE TMPDIR NAME DELAY LINE RESULT SECTIONS SECTION
-    local -a PROXY_GROUPS LEAVES GNODES ITEMS
-    declare -A DELAYS SHOWN
+    local PROXIES NODE TMPDIR NAME DELAY LINE RESULT
+    local -a LEAVES ITEMS
+    declare -A DELAYS
     local i COUNT TOTAL
 
     PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
@@ -242,20 +201,8 @@ mihomo_nodes()
         return 0
     fi
 
-    GROUP=$(mihomo_pick_group_from "$PROXIES")
-    NODE=$(mihomo_current_node_from "$PROXIES" "$GROUP")
-    NODE=$(mihomo_resolve_leaf_from "$PROXIES" "$NODE")
+    NODE=$(mihomo_current_node_effective "$PROXIES")
 
-    # 展示组：名称含“节点”的组（如 香港节点/美国节点），排除内置
-    mapfile -t PROXY_GROUPS < <(echo "$PROXIES" | jq -r '
-        [ .proxies | to_entries[]
-          | select(.value.type == "Selector" or .value.type == "URLTest" or .value.type == "Fallback")
-          | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
-          | select(.key | test("节点"))
-          | .key ]
-        | unique[]' | tr -d '\r')
-
-    # 全部叶子节点（去重）
     mapfile -t LEAVES < <(mihomo_leaf_nodes_from "$PROXIES")
 
     # 并行测速全部叶子
@@ -280,94 +227,120 @@ mihomo_nodes()
     done
     rm -rf "$TMPDIR"
 
-    TOTAL=0
-    SECTIONS=""
-
-    # 区域组区块
-    for GROUP in "${PROXY_GROUPS[@]}"
-    do
-        mapfile -t GNODES < <(echo "$PROXIES" | jq -r --arg g "$GROUP" --arg t "$MIHOMO_GROUP_TYPES" '
-            [ .proxies[$g].all[]? as $n
-              | select((.proxies[$n].type // "") as $ty | ($t | split("|")) | index($ty) | not)
-              | $n ]
-            | unique[]' | tr -d '\r')
-
-        ITEMS=()
-        for NAME in "${GNODES[@]}"
-        do
-            DELAY="${DELAYS[$NAME]:-}"
-            [ -n "$DELAY" ] && ITEMS+=("$DELAY $NAME")
-        done
-        [ "${#ITEMS[@]}" -eq 0 ] && continue
-
-        SECTION="$GROUP:
-"
-        COUNT=0
-        while IFS= read -r LINE
-        do
-            [ -z "$LINE" ] && continue
-            DELAY=${LINE%% *}
-            NAME=${LINE#* }
-            COUNT=$((COUNT + 1))
-            [ "$COUNT" -gt "$MIHOMO_NODE_LIMIT" ] && break
-            SHOWN["$NAME"]=1
-            TOTAL=$((TOTAL + 1))
-            if [ "$NAME" = "$NODE" ]
-            then
-                SECTION="$SECTION▶ $NAME — ${DELAY}ms
-"
-            else
-                SECTION="$SECTION• $NAME — ${DELAY}ms
-"
-            fi
-        done < <(printf '%s\n' "${ITEMS[@]}" | sort -n)
-
-        SECTIONS="$SECTIONS
-$SECTION"
-    done
-
-    # 未归入区域组的可用节点
     ITEMS=()
     for NAME in "${LEAVES[@]}"
     do
-        [ -n "${SHOWN[$NAME]:-}" ] && continue
         DELAY="${DELAYS[$NAME]:-}"
         [ -n "$DELAY" ] && ITEMS+=("$DELAY $NAME")
     done
-    if [ "${#ITEMS[@]}" -gt 0 ]
+
+    TOTAL=${#ITEMS[@]}
+    COUNT=0
+    RESULT="🚀 Mihomo 可用节点（$TOTAL 个）
+
+"
+
+    while IFS= read -r LINE
+    do
+        [ -z "$LINE" ] && continue
+        DELAY=${LINE%% *}
+        NAME=${LINE#* }
+        COUNT=$((COUNT + 1))
+        [ "$COUNT" -gt "$MIHOMO_NODE_LIMIT" ] && break
+
+        if [ "$NAME" = "$NODE" ]
+        then
+            RESULT="$RESULT▶ $NAME — ${DELAY}ms
+"
+        else
+            RESULT="$RESULT• $NAME — ${DELAY}ms
+"
+        fi
+    done < <(printf '%s\n' "${ITEMS[@]}" | sort -n)
+
+    if [ "$COUNT" -eq 0 ]
     then
-        SECTION="其他节点:
+        RESULT="🚀 Mihomo 可用节点（0 个）
+
+当前没有可用节点
 "
-        while IFS= read -r LINE
-        do
-            [ -z "$LINE" ] && continue
-            DELAY=${LINE%% *}
-            NAME=${LINE#* }
-            SHOWN["$NAME"]=1
-            TOTAL=$((TOTAL + 1))
-            if [ "$NAME" = "$NODE" ]
-            then
-                SECTION="$SECTION▶ $NAME — ${DELAY}ms
-"
-            else
-                SECTION="$SECTION• $NAME — ${DELAY}ms
-"
-            fi
-        done < <(printf '%s\n' "${ITEMS[@]}" | sort -n)
-        SECTIONS="$SECTIONS
-$SECTION"
     fi
+    [ "$TOTAL" -gt "$MIHOMO_NODE_LIMIT" ] && RESULT="$RESULT…共 $TOTAL 个可用节点
+"
 
-    if [ "$TOTAL" -eq 0 ]
-    then
-        echo "🚀 Mihomo 节点测速
+    echo "$RESULT"
+}
 
-当前没有可用节点"
-        return 0
-    fi
 
-    echo "🚀 Mihomo 节点测速（可用 $TOTAL 个）
-$SECTIONS"
+# 切换目标组选择（无组名）：
+# 1) 真实流量链路中最深的 Selector 组；2) 回退叶子最多的 Selector 组
+mihomo_switch_group_from()
+{
+    local PROXIES="$1" NAME="$2"
+    local CHAIN G T
+
+    CHAIN=$(curl -s --max-time 3 "$(mihomo_api)/connections" \
+        | jq -r '.connections[]? | select((.chains // []) | length > 1) | .chains | join("\n")' \
+        | head -40 | tr -d '\r')
+
+    while IFS= read -r G
+    do
+        [ -z "$G" ] && continue
+        [ "$G" = "$NAME" ] && continue
+        T=$(echo "$PROXIES" | jq -r --arg g "$G" '.proxies[$g].type // empty' | tr -d '\r')
+        [ "$T" != "Selector" ] && continue
+        if [ "$(echo "$PROXIES" | jq -r --arg g "$G" --arg n "$NAME" '((.proxies[$g].all // []) | index($n)) != null' | tr -d '\r')" = "true" ]
+        then
+            echo "$G"
+            return 0
+        fi
+    done <<< "$CHAIN"
+
+    echo "$PROXIES" | jq -r --arg n "$NAME" --arg t "$MIHOMO_GROUP_TYPES" '
+        . as $p |
+        [ $p.proxies | to_entries[]
+          | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
+          | select(.value.type == "Selector" and ((.value.all // []) | index($n)))
+          | { key: .key, leaves: ([.value.all[]? as $m | select(($p.proxies[$m].type // "") as $ty | ($t | split("|")) | index($ty) | not) | $m] | length) } ]
+        | sort_by(-.leaves) | .[0].key // empty' | tr -d '\r'
+}
+
+
+# 自动组检测（仅自动类组包含该节点，无法手动切换）
+mihomo_auto_group_from()
+{
+    local PROXIES="$1" NAME="$2"
+
+    echo "$PROXIES" | jq -r --arg n "$NAME" '
+        [ .proxies | to_entries[]
+          | select(.key != "GLOBAL" and .key != "DIRECT" and .key != "REJECT" and .key != "REJECT-DROP")
+          | select((.value.type == "URLTest" or .value.type == "Fallback" or .value.type == "LoadBalance" or .value.type == "Relay")
+            and ((.value.all // []) | index($n)))
+          | .key ] | .[0] // empty' | tr -d '\r'
+}
+
+
+# 主组联动：若主组包含目标组，把主组切过去，保证切换真正生效
+mihomo_route_main_to()
+{
+    local PROXIES="$1" GROUP="$2"
+    local MAIN MAIN_TYPE JSON
+
+    MAIN=$(mihomo_main_group_from "$PROXIES")
+    [ -z "$MAIN" ] && return 0
+    [ "$MAIN" = "$GROUP" ] && return 0
+
+    MAIN_TYPE=$(echo "$PROXIES" | jq -r --arg m "$MAIN" '.proxies[$m].type // empty' | tr -d '\r')
+    [ "$MAIN_TYPE" != "Selector" ] && return 0
+
+    [ "$(echo "$PROXIES" | jq -r --arg m "$MAIN" --arg g "$GROUP" '((.proxies[$m].all // []) | index($g)) != null' | tr -d '\r')" != "true" ] && return 0
+
+    JSON=$(jq -cn --arg n "$GROUP" '{name:$n}' | tr -d '\r')
+    printf '%s' "$JSON" | curl -s -o /dev/null --max-time 3 \
+        -X PUT \
+        -H "Content-Type: application/json" \
+        --data-binary @- \
+        "$(mihomo_api)/proxies/$(mihomo_uri "$MAIN")" || true
 }
 
 
@@ -384,7 +357,7 @@ mihomo_switch()
         return 0
     fi
 
-    GROUP=$(mihomo_switch_find_group_from "$PROXIES" "$NAME")
+    GROUP=$(mihomo_switch_group_from "$PROXIES" "$NAME")
 
     # 精确匹配失败时模糊匹配：节点名可能丢失了国旗前缀等
     if [ -z "$GROUP" ]
@@ -400,7 +373,7 @@ mihomo_switch()
         if [ "$COUNT" -eq 1 ]
         then
             NAME=$(printf '%s\n' "$MATCHES" | head -1)
-            GROUP=$(mihomo_switch_find_group_from "$PROXIES" "$NAME")
+            GROUP=$(mihomo_switch_group_from "$PROXIES" "$NAME")
         elif [ "$COUNT" -gt 1 ]
         then
             CANDIDATE=$(printf '%s\n' "$MATCHES" | head -1)
@@ -416,23 +389,13 @@ $(printf '%s\n' "$MATCHES" | head -10)
 
     if [ -z "$GROUP" ]
     then
-        AUTO=$(echo "$PROXIES" | jq -r --arg n "$NAME" '
-            [ .proxies | to_entries[]
-              | select((( .value.all // [] ) | index($n)))
-              | .key ] | .[0] // empty' | tr -d '\r')
+        AUTO=$(mihomo_auto_group_from "$PROXIES" "$NAME")
         if [ -n "$AUTO" ]
         then
             echo "❌ 该节点位于自动选择组，无法手动切换"
         else
             echo "❌ 未找到该节点，请从 /mihomo 复制完整节点名（含国旗前缀）"
         fi
-        return 0
-    fi
-
-    TYPE=$(mihomo_group_type_from "$PROXIES" "$GROUP")
-    if [ "$TYPE" != "Selector" ]
-    then
-        echo "❌ 当前节点组为自动选择（$TYPE），无法手动切换"
         return 0
     fi
 
@@ -446,6 +409,9 @@ $(printf '%s\n' "$MATCHES" | head -10)
 
     if [ "$CODE" = "204" ] || [ "$CODE" = "200" ]
     then
+        # 主组联动，确保切换真正生效
+        mihomo_route_main_to "$PROXIES" "$GROUP"
+
         DELAY=$(mihomo_delay "$NAME")
         if [ -n "$DELAY" ]
         then
