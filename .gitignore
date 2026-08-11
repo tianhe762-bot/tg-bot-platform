@@ -11,6 +11,10 @@ logs/
 *.log
 *.tmp
 
+# 运行时状态
+data/*.lock
+data/update_offset
+
 # 发布包
 releases/
 

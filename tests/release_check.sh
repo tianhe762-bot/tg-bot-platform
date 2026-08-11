@@ -83,7 +83,7 @@ ERROR=1
 fi
 
 
-done < <(find "$ROOT" -name "*.sh")
+done < <(find "$ROOT" -type f -name "*.sh" -not -path "$ROOT/.git/*")
 
 
 
