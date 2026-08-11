@@ -62,12 +62,27 @@ if [ -f "$IGNORE_FILE" ]; then
     done < "$IGNORE_FILE"
 fi
 
-tar -czf "$TAR_PATH" \
+# 先将文件暂存到临时目录，并把文本文件统一转换为 LF 换行，
+# 避免 Windows 检出产生的 CRLF 破坏服务器上的 Shell 脚本
+STAGE_DIR="$(mktemp -d)"
+trap 'rm -rf "$STAGE_DIR"' EXIT
+
+tar -cf - \
     -C "$ROOT" \
     --exclude=".git" \
     --exclude="releases" \
     "${EXCLUDE_ARGS[@]}" \
-    .
+    . | tar -xf - -C "$STAGE_DIR"
+
+while IFS= read -r -d '' f; do
+    # 跳过二进制文件（包含 NUL 字节）
+    if ! tr -d '\0' < "$f" | cmp -s - "$f"; then
+        continue
+    fi
+    sed -i 's/\r$//' "$f"
+done < <(find "$STAGE_DIR" -type f -print0)
+
+tar -czf "$TAR_PATH" -C "$STAGE_DIR" .
 
 echo "✅ 打包完成: $TAR_PATH"
 
