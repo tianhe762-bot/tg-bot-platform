@@ -57,12 +57,17 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 自动展开到最底层节点并并行测速，只保留**连通且延迟 ≤800ms** 的节点，按延迟从低到高排列，当前节点标 `▶`：
 
 ```text
-🚀 Mihomo 可用节点（4 个）
+🚀 Mihomo 节点测速（可用 4 个）
 
+🇭🇰 香港节点:
 ▶ 节点-香港01 — 120ms
+• 节点-香港02 — 350ms
+
+🇯🇵 日韩节点:
 • 节点-日本02 — 180ms
+
+其他节点:
 • 共享节点 — 200ms
-• 节点-新加坡03 — 350ms
 ```
 
 ### 🔀 一键切换节点 `/switch`
