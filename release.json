@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "release_date": "2026-08-12",
-    "description": "v1.4.0 - flat leaf node list with latency, version-check update flow, rewritten help, switch delay feedback",
+    "description": "v1.5.0 - unified status with CPU usage/temp/network, leaner command set, switch template in help, current-node leaf fix",
     "author": "TG Bot"
 }

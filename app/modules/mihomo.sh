@@ -67,6 +67,35 @@ mihomo_current_node()
 }
 
 
+# 递归解析到最底层节点（如 子组“美国” → 叶子“美国-洛杉矶01”）
+mihomo_resolve_leaf()
+{
+    local NAME="$1" PROXIES TYPE NOW
+    local -i DEPTH=0
+
+    PROXIES=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
+    [ -z "$PROXIES" ] && { echo "$NAME"; return 0; }
+
+    while [ "$DEPTH" -lt 10 ]
+    do
+        TYPE=$(echo "$PROXIES" | jq -r --arg n "$NAME" '.proxies[$n].type // empty' | tr -d '\r')
+        case "$TYPE" in
+            Selector|URLTest|Fallback|LoadBalance|Relay|Compatible)
+                NOW=$(echo "$PROXIES" | jq -r --arg n "$NAME" '.proxies[$n].now // empty' | tr -d '\r')
+                [ -z "$NOW" ] && break
+                NAME="$NOW"
+                DEPTH=$((DEPTH + 1))
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    echo "$NAME"
+}
+
+
 # 获取最底层节点（过滤组/内置类型并去重）
 mihomo_leaf_nodes()
 {
@@ -101,6 +130,7 @@ mihomo_connected()
 
     GROUP=$(mihomo_pick_group) || { echo "❌ 未开启"; return 0; }
     NODE=$(mihomo_current_node "$GROUP")
+    NODE=$(mihomo_resolve_leaf "$NODE")
 
     if [ -z "$NODE" ]
     then
@@ -134,6 +164,7 @@ mihomo_nodes()
 
     GROUP=$(mihomo_pick_group) || { echo "❌ Mihomo 未开启或无法连接"; return 0; }
     NODE=$(mihomo_current_node "$GROUP")
+    NODE=$(mihomo_resolve_leaf "$NODE")
 
     TMPDIR=$(mktemp -d)
 

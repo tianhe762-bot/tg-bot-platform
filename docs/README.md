@@ -55,7 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 
 | Command     | Function     |
 | ----------- | ----------- |
-| `/status`   | 查看系统状态      |
+| `/status`   | 系统状态总览（CPU/温度/网络） |
 | `/mihomo`   | 最底层节点测速     |
 | `/switch`   | 切换代理节点    |
 | `/wake`     | Wake-on-LAN |
@@ -75,8 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 * 磁盘监控
 * 网络状态
 * Docker状态
-* 服务状态
-* 系统日志查看
+* Mihomo节点测速
 
 ---
 
@@ -87,9 +86,19 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 支持：
 
 * Mihomo状态检测
-* API连接检测
-* 服务状态检查
-* 多端口兼容
+* 最底层节点并行测速（只显示连通且延迟 ≤800ms 的节点）
+* 一键切换代理节点（`/switch 节点名`）
+* 切换成功后显示新节点延迟
+
+切换节点模板（也可通过 `/help` 查看）：
+
+```text
+1. 发送 /mihomo 查看可用节点
+2. 复制一个节点名
+3. 发送 /switch 节点名
+
+例如: /switch 美国-洛杉矶01
+```
 
 兼容：
 

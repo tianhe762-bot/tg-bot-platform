@@ -15,6 +15,73 @@ status_size()
 }
 
 
+# 字节容量格式化（B -> 易读单位）
+status_bytes()
+{
+    local B="$1"
+
+    if [ "$B" -ge 1073741824 ]
+    then
+        awk -v b="$B" 'BEGIN { printf "%.1fG", b / 1073741824 }'
+    elif [ "$B" -ge 1048576 ]
+    then
+        awk -v b="$B" 'BEGIN { printf "%.0fM", b / 1048576 }'
+    else
+        awk -v b="$B" 'BEGIN { printf "%.0fK", b / 1024 }'
+    fi
+}
+
+
+# CPU 使用率计算（纯计算，便于测试）
+status_cpu_usage_calc()
+{
+    printf '%s\n%s\n' "$1" "$2" | awk '
+        NR==1 { for(i=2;i<=NF;i++) t1+=$i; idle1=$5+$6 }
+        NR==2 { for(i=2;i<=NF;i++) t2+=$i; idle2=$5+$6 }
+        END {
+            dt=t2-t1
+            di=idle2-idle1
+            if (dt > 0) printf "%d", (dt-di)*100/dt
+            else printf "0"
+        }'
+}
+
+
+# 当前 CPU 使用率（两次采样 /proc/stat）
+status_cpu_usage()
+{
+    local S1 S2
+
+    S1=$(awk '/^cpu / {print}' /proc/stat 2>/dev/null)
+    sleep 0.5
+    S2=$(awk '/^cpu / {print}' /proc/stat 2>/dev/null)
+
+    if [ -n "$S1" ] && [ -n "$S2" ]
+    then
+        status_cpu_usage_calc "$S1" "$S2"
+    else
+        echo "-"
+    fi
+}
+
+
+# CPU 温度（thermal_zone 最大值，毫摄氏度转 °C）
+status_cpu_temp()
+{
+    local T
+
+    T=$(awk '{print $1}' /sys/class/thermal/thermal_zone*/temp 2>/dev/null \
+    | sort -rn | head -1)
+
+    if [ -n "$T" ] && [ "$T" -gt 0 ]
+    then
+        awk -v t="$T" 'BEGIN { printf "%.0f°C", t / 1000 }'
+    else
+        echo "未知"
+    fi
+}
+
+
 status_execute()
 {
 
@@ -41,14 +108,8 @@ fi
 UPTIME=$(uptime -p)
 
 
-CPU_LOAD=$(uptime \
-| sed -n 's/.*load average: *\([0-9.]*\), *\([0-9.]*\), *\([0-9.]*\).*/\1 \2 \3/p')
-LOAD1=$(echo "$CPU_LOAD" | awk '{print $1}')
-LOAD5=$(echo "$CPU_LOAD" | awk '{print $2}')
-LOAD15=$(echo "$CPU_LOAD" | awk '{print $3}')
-[ -z "$LOAD1" ] && LOAD1="-"
-[ -z "$LOAD5" ] && LOAD5="-"
-[ -z "$LOAD15" ] && LOAD15="-"
+CPU_USAGE=$(status_cpu_usage)
+CPU_TEMP=$(status_cpu_temp)
 
 
 # 内存：直接读取 /proc/meminfo，避免依赖 free 命令
@@ -73,6 +134,17 @@ DATA_DISK=$(df -h /mnt/photos 2>/dev/null \
 [ -z "$DATA_DISK" ] && DATA_DISK="未挂载"
 
 
+# 网络：默认路由网卡与累计流量
+IFACE=$(ip route 2>/dev/null | awk '/default/ {print $5}')
+NETWORK="未知"
+if [ -n "$IFACE" ]
+then
+    RX=$(cat "/sys/class/net/$IFACE/statistics/rx_bytes" 2>/dev/null || echo 0)
+    TX=$(cat "/sys/class/net/$IFACE/statistics/tx_bytes" 2>/dev/null || echo 0)
+    NETWORK="网卡: $IFACE · 下载: $(status_bytes "$RX") · 上传: $(status_bytes "$TX")"
+fi
+
+
 DOCKER_LIST=$(docker ps --format '• {{.Names}} : {{.Status}}' 2>/dev/null || true)
 DOCKER_COUNT=$(printf '%s\n' "$DOCKER_LIST" | grep -c '^•' || true)
 DOCKER_COUNT=${DOCKER_COUNT:-0}
@@ -90,13 +162,15 @@ TEXT="
 
 ⏱️ 已持续运行: $UPTIME
 
-📊 CPU 负载: 1分钟 $LOAD1 · 5分钟 $LOAD5 · 15分钟 $LOAD15
+📊 CPU 使用率: $CPU_USAGE% · 温度: $CPU_TEMP
 
 🧠 内存: $MEM
 
 💾 系统盘: $ROOT_DISK
 
 🗄️ 数据盘: $DATA_DISK
+
+🌐 网络: $NETWORK
 
 🐳 Docker: $DOCKER_COUNT 个容器
 $DOCKER_LIST

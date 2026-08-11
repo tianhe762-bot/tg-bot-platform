@@ -18,8 +18,7 @@ then
 用法:
 /switch 节点名
 
-示例:
-/switch 香港01"
+节点名从 /mihomo 复制，完整模板见 /help。"
 else
     RESULT=$(mihomo_switch "$NAME")
 fi
