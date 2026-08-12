@@ -34,9 +34,22 @@ if [ "$DISK" -ge 90 ]; then
 fi
 
 if command -v docker >/dev/null 2>&1; then
-    STOPPED=$(docker ps -a --filter "status=exited" -q 2>/dev/null | wc -l || echo 0)
-    if [ "$STOPPED" -gt 0 ]; then
-        send_alert "存在异常退出的 Docker 容器数量: $STOPPED"
+    STATE_FILE="$ROOT/data/docker_alert.state"
+    ABNORMAL=""
+    if [ -n "$(docker ps -aq 2>/dev/null)" ]; then
+        ABNORMAL=$(docker inspect -f '{{.Name}}|{{.State.Status}}|{{.State.ExitCode}}' $(docker ps -aq) 2>/dev/null \
+            | awk -F'|' '$2=="exited" && $3!="0" {n=$1; sub(/^\//,"",n); print n " (code " $3 ")"}' \
+            | sort -u | tr '\n' ' ' | sed 's/ $//')
+    fi
+    PREV=""
+    [ -f "$STATE_FILE" ] && PREV=$(cat "$STATE_FILE" 2>/dev/null)
+    if [ -n "$ABNORMAL" ]; then
+        if [ "$ABNORMAL" != "$PREV" ]; then
+            send_alert "Docker 异常退出容器: $ABNORMAL"
+            printf '%s\n' "$ABNORMAL" > "$STATE_FILE"
+        fi
+    elif [ -n "$PREV" ]; then
+        send_alert "Docker 异常已恢复"
+        : > "$STATE_FILE"
     fi
 fi
-
