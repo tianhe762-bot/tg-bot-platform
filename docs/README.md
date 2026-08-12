@@ -142,6 +142,15 @@ curl -fsSL https://raw.githubusercontent.com/tianhe762-bot/tg-bot-platform/main/
 
 ---
 
+## 🐶 看门狗与国内推送兜底
+
+- `/watchdog`：查看看门狗列表与开/关状态；回复数字切换，或 `/watchdog 数字` 一步切换。
+- 服务器面板：`tg-bot` → `14 看门狗管理`、`15 国内推送配置`。
+- ShellCrash 自愈看门狗默认每 2 分钟检查一次：开机自启失败时自动重建配置并重启，恢复/失败均推送 Telegram。
+- 国内推送兜底：在面板 `15` 填入企业微信 webhook 或 Server酱 SendKey 后生效，Telegram 不可达时自动切换。
+
+---
+
 ## 🚀 快速开始
 
 ### 1. 一键安装

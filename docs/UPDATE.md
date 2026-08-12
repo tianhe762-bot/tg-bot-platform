@@ -1,5 +1,13 @@
 # 更新记录
 
+## v2.0.0
+
+- 新增看门狗管理：`/watchdog` 命令（菜单/回复数字切换）与 `tg-bot` 面板（14 看门狗管理），注册表可扩展多个看门狗
+- 新增 ShellCrash 自愈看门狗：开机自启失败自动重建配置并重启，恢复/失败推送 Telegram（systemd timer 每 2 分钟）
+- 新增国内推送兜底：Telegram 不可达时自动转推企业微信 / Server酱（面板 15 配置）
+- 新增机械硬盘休眠支持：hdparm apm/standby（10 分钟停转）+ udev 持久化
+- 部署流程：自动生成 watchdogs.conf 并启用看门狗 timer；UPS 断电告警增加国内兜底
+
 
 ## v1.8.1
 
