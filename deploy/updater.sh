@@ -6,10 +6,12 @@
 set -euo pipefail
 
 REPO="tianhe762-bot/tg-bot-platform"
-API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 INSTALL_DIR="/opt/tg_bot"
 BACKUP_DIR="${INSTALL_DIR}/backups"
 VERSION_FILE="${INSTALL_DIR}/VERSION"
+
+source "${INSTALL_DIR}/config/system.env" 2>/dev/null || true
+source "${INSTALL_DIR}/app/lib/net.sh" 2>/dev/null || true
 
 echo "=========================================="
 echo "       TG Bot Platform Updater"
@@ -30,35 +32,31 @@ CURRENT_VERSION=$(tr -d ' \r\n' < "$VERSION_FILE")
 echo "当前本地版本: v${CURRENT_VERSION}"
 
 echo "正在检查 GitHub 最新版本..."
-RELEASE_JSON=$(curl -sSL --connect-timeout 10 --retry 3 "$API_URL" || true)
-
-if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q "Not Found"; then
-    echo "❌ 无法获取最新 Release 信息，请检查网络。"
-    exit 1
-fi
-
-LATEST_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
+TAG_FILE=$(mktemp)
+net_latest_tag "$REPO" > "$TAG_FILE" 2>/dev/null || true
+LATEST_TAG=$(cat "$TAG_FILE" 2>/dev/null || true)
+rm -f "$TAG_FILE"
 LATEST_VERSION="${LATEST_TAG#v}"
 
 if [ -z "$LATEST_VERSION" ]; then
-    echo "❌ 解析最新版本号失败"
+    echo "❌ 无法获取最新版本，失败原因："
+    echo "   ${NET_LATEST_ERR:-未知}"
     exit 1
 fi
 
-echo "GitHub 最新版本: v${LATEST_VERSION}"
+echo "GitHub 最新版本: v${LATEST_VERSION}（来源：${NET_LATEST_SRC}）"
 
-if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
+set +e
+version_compare "$CURRENT_VERSION" "$LATEST_VERSION"
+VC=$?
+set -e
+if [ "$VC" -ne 2 ]; then
     echo "✅ 当前已是最新版本，无需更新。"
     exit 0
 fi
 
-PACKAGE_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz") and (endswith(".tar.gz.sha256") | not)) | .browser_download_url' | head -n 1)
-SHA256_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz.sha256")) | .browser_download_url' | head -n 1)
-
-if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ]; then
-    echo "❌ 未找到最新版本的安装包"
-    exit 1
-fi
+PACKAGE_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/tg_bot-v${LATEST_VERSION}.tar.gz"
+SHA256_URL="${PACKAGE_URL}.sha256"
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -69,22 +67,21 @@ mkdir -p "$EXTRACT" "$BACKUP_DIR"
 
 echo
 echo "正在下载更新包 (v${LATEST_VERSION})..."
-if ! curl -fL --connect-timeout 15 --retry 3 "$PACKAGE_URL" -o "$PACKAGE"; then
-    echo "❌ 下载更新包失败"
+if ! net_curl -fL --connect-timeout 15 --retry 3 "$PACKAGE_URL" -o "$PACKAGE"; then
+    echo "❌ 下载更新包失败，请检查网络/代理后重试"
     exit 1
 fi
 
-if [ -n "$SHA256_URL" ] && [ "$SHA256_URL" != "null" ]; then
-    SHA256_FILE="$TMP_DIR/update.tar.gz.sha256"
-    if curl -fL --connect-timeout 10 --retry 2 "$SHA256_URL" -o "$SHA256_FILE"; then
-        EXPECTED_SHA=$(awk '{print $1}' "$SHA256_FILE")
-        ACTUAL_SHA=$(sha256sum "$PACKAGE" | awk '{print $1}')
-        if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
-            echo "❌ SHA256 校验失败，终止更新！"
-            exit 1
-        fi
-        echo "✅ SHA256 校验通过"
+if net_curl -fL --connect-timeout 10 --retry 2 "$SHA256_URL" -o "$TMP_DIR/update.tar.gz.sha256"; then
+    EXPECTED_SHA=$(awk '{print $1}' "$TMP_DIR/update.tar.gz.sha256")
+    ACTUAL_SHA=$(sha256sum "$PACKAGE" | awk '{print $1}')
+    if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+        echo "❌ SHA256 校验失败，终止更新！"
+        exit 1
     fi
+    echo "✅ SHA256 校验通过"
+else
+    echo "⚠️ 校验文件下载失败，跳过 SHA256 强校验"
 fi
 
 # 解压新文件
@@ -126,7 +123,7 @@ echo "✅ 文件更新完成"
 
 # 3. 重启并进行健康检查
 echo
-echo "正在重启 tg_bot 服务并检查健康状态..."
+echo "正在重启 tg_bot 服务并检查健康状况..."
 if systemctl is-active --quiet tg_bot; then
     systemctl restart tg_bot || true
 fi

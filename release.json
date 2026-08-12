@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "release_date": "2026-08-12",
-    "description": "v2.0.3 - single-instance bot lock + /status bot version; deployment must restart tg_bot after module changes",
+    "description": "v2.0.4 - multi-channel version fetch (redirect/raw/custom/api fallback) with explicit failure reasons; install/updater bypass api.github.com",
     "author": "TG Bot"
 }

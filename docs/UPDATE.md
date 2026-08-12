@@ -1,5 +1,13 @@
 # 更新记录
 
+## v2.0.4
+
+- 版本检查与在线更新不再依赖 api.github.com（该端点会间歇性 403/限流）：改用 github.com releases/latest 重定向 → raw VERSION → 自定义地址 → api.github.com 兜底 多通道获取
+- 更新包与校验文件按固定命名规则直接构造下载地址（tg_bot-vX.Y.Z.tar.gz[.sha256]）
+- 所有失败都输出具体原因（HTTP 403 / 超时 / 解析失败），Telegram /update 与面板都能看到
+- 新增 app/lib/net.sh：统一“代理优先、失败直连”；install.sh 全新安装同样走新逻辑并支持 TG_PROXY
+
+
 ## v2.0.3
 
 - tg_bot 增加单实例锁（flock），防止多个 bot 进程同时轮询 Telegram 抢消息

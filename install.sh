@@ -13,7 +13,8 @@ set -euo pipefail
 
 
 REPO="tianhe762-bot/tg-bot-platform"
-API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+PROXY_OPTS=()
+[ -n "${TG_PROXY:-}" ] && PROXY_OPTS=(--proxy "$TG_PROXY")
 
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -58,15 +59,18 @@ SHA256_URL=""
 if [ -z "$PACKAGE_URL" ]; then
     echo
     echo "[2/4] 从 GitHub Release 获取最新版本..."
-    
-    RELEASE_JSON=$(curl -sSL --connect-timeout 10 --retry 3 "$API_URL" || true)
-    
-    if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q "Not Found"; then
-        echo "⚠️ 无法从 GitHub API 获取最新 Release，转为手动输入。"
+
+    LATEST_TAG=$(curl -s -o /dev/null -w '%{url_effective}' -L --max-time 20 "${PROXY_OPTS[@]}" \
+        "https://github.com/${REPO}/releases/latest" 2>/dev/null | sed -n 's#.*/tag/##p')
+
+    if [ -z "$LATEST_TAG" ]; then
+        echo "⚠️ 无法自动获取最新 Release，转入手动输入。"
         read -rp "请输入安装包 URL (.tar.gz): " PACKAGE_URL
     else
-        PACKAGE_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz") and (endswith(".tar.gz.sha256") | not)) | .browser_download_url' | head -n 1)
-        SHA256_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".tar.gz.sha256")) | .browser_download_url' | head -n 1)
+        LATEST_VERSION="${LATEST_TAG#v}"
+        PACKAGE_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/tg_bot-v${LATEST_VERSION}.tar.gz"
+        SHA256_URL="${PACKAGE_URL}.sha256"
+        echo "✅ 最新版本: ${LATEST_TAG}"
     fi
 fi
 
@@ -94,18 +98,18 @@ echo
 echo "[3/4] 下载程序包并校验..."
 
 
-if ! curl -fL --connect-timeout 15 --retry 3 "$PACKAGE_URL" -o "$PACKAGE"; then
+if ! curl -fL --connect-timeout 15 --retry 3 "${PROXY_OPTS[@]}" "$PACKAGE_URL" -o "$PACKAGE"; then
     echo "❌ 下载安装包失败"
     exit 1
 fi
 
 
-if [ -n "$SHA256_URL" ] && [ "$SHA256_URL" != "null" ]; then
+if [ -n "$SHA256_URL" ]; then
     SHA256_FILE="$TMP_DIR/tg_bot.tar.gz.sha256"
-    if curl -fL --connect-timeout 10 --retry 2 "$SHA256_URL" -o "$SHA256_FILE"; then
+    if curl -fL --connect-timeout 10 --retry 2 "${PROXY_OPTS[@]}" "$SHA256_URL" -o "$SHA256_FILE"; then
         EXPECTED_SHA=$(awk '{print $1}' "$SHA256_FILE")
         ACTUAL_SHA=$(sha256sum "$PACKAGE" | awk '{print $1}')
-        
+
         if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
             echo "❌ SHA256 校验失败!"
             echo "期望值: $EXPECTED_SHA"
@@ -180,5 +184,5 @@ echo "请输入以下命令进入配置向导："
 echo
 echo "    tg-bot"
 echo
-echo "然后选择【首次安装配置】"
+echo "然后选择【首次安装配置】。"
 echo
