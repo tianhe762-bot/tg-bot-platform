@@ -15,6 +15,13 @@ DATA="$ROOT/data"
 
 mkdir -p "$DATA"
 
+# 单实例锁：防止多个 bot 进程同时轮询 Telegram（子 shell 继承锁，不冲突）
+exec 9>"$DATA/bot.lock"
+if ! flock -n 9; then
+    echo "Another bot instance is already running, exiting"
+    exit 0
+fi
+
 
 source "$APP/lib/config.sh"
 source "$APP/lib/telegram.sh"

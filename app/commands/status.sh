@@ -104,6 +104,8 @@ then
 fi
 [ -z "$OS" ] && OS=$(uname -srm 2>/dev/null || echo "unknown")
 
+BOT_VERSION=$(tr -d ' \r\n' < /opt/tg_bot/VERSION 2>/dev/null || echo "unknown")
+
 
 UPTIME=$(uptime -p)
 
@@ -159,6 +161,8 @@ TEXT="
 🖥️ 主机: $HOST
 
 💻 系统: $OS
+
+🤖 机器人版本: v$BOT_VERSION
 
 ⏱️ 已持续运行: $UPTIME
 
