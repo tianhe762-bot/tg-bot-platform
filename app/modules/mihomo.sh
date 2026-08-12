@@ -102,7 +102,8 @@ mihomo_resolve_leaf_from()
 }
 
 
-# 真实当前节点：优先 /connections 链路首元素（完全无组名依赖）
+# 真实当前节点：优先 /connections 中“最新连接”的链路首元素
+# （旧连接可能仍走切换前的节点，取最新连接才能反映当前切换结果）
 mihomo_real_node()
 {
     local RAW NODE
@@ -111,8 +112,10 @@ mihomo_real_node()
     [ -z "$RAW" ] && return 0
 
     NODE=$(echo "$RAW" | jq -r '
-        [ .connections[]? | select((.chains // []) | length > 0) | .chains[0]
-          | select(. != "DIRECT" and . != "REJECT" and . != "REJECT-DROP" and . != "GLOBAL" and . != "PASS") ][0] // empty' | tr -d '\r')
+        [ .connections[]? | select((.chains // []) | length > 0)
+          | { s: .start, n: (.chains[0] // "") }
+          | select(.n != "DIRECT" and .n != "REJECT" and .n != "REJECT-DROP" and .n != "GLOBAL" and .n != "PASS") ]
+        | sort_by(.s) | reverse | .[0].n // empty' | tr -d '\r')
 
     if [ -z "$NODE" ]
     then
@@ -474,7 +477,10 @@ $(printf '%s\n' "${USABLE[@]}" | head -10)
         # 主组路由联动，确保切换真正生效（返回实际切换的汇聚组）
         ROUTE=$(mihomo_route_main_to "$PROXIES" "$GROUP")
 
-        # 校验生效节点：沿汇聚组（或目标组）的 now 链解析，避免旧连接缓存干扰
+        # 关闭现有连接：切换前的旧连接立即以新节点重连，让切换对所有流量即时生效
+        curl -s -o /dev/null --max-time 3 -X DELETE "$(mihomo_api)/connections" || true
+
+        # 校验生效节点：沿汇聚组（或目标组）的 now 链解析
         P2=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
         if [ -n "$ROUTE" ]
         then

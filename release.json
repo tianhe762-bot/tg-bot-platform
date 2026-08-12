@@ -1,7 +1,7 @@
 {
     "name": "TG Bot Platform",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "release_date": "2026-08-12",
-    "description": "v2.0.1 - fix /switch reporting success without taking effect: route via real connection chain and verify effective node",
+    "description": "v2.0.2 - /switch closes stale connections so switch takes effect immediately; status shows newest connection node",
     "author": "TG Bot"
 }
