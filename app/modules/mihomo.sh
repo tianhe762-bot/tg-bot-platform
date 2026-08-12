@@ -272,29 +272,10 @@ mihomo_nodes()
 }
 
 
-# 切换目标组选择（无组名）：
-# 1) 真实流量链路中最深的 Selector 组；2) 回退叶子最多的 Selector 组
+# 切换目标组选择（无组名）：包含该节点的、叶子最多的非内置 Selector 组
 mihomo_switch_group_from()
 {
     local PROXIES="$1" NAME="$2"
-    local CHAIN G T
-
-    CHAIN=$(curl -s --max-time 3 "$(mihomo_api)/connections" \
-        | jq -r '.connections[]? | select((.chains // []) | length > 1) | .chains | join("\n")' \
-        | head -40 | tr -d '\r')
-
-    while IFS= read -r G
-    do
-        [ -z "$G" ] && continue
-        [ "$G" = "$NAME" ] && continue
-        T=$(echo "$PROXIES" | jq -r --arg g "$G" '.proxies[$g].type // empty' | tr -d '\r')
-        [ "$T" != "Selector" ] && continue
-        if [ "$(echo "$PROXIES" | jq -r --arg g "$G" --arg n "$NAME" '((.proxies[$g].all // []) | index($n)) != null' | tr -d '\r')" = "true" ]
-        then
-            echo "$G"
-            return 0
-        fi
-    done <<< "$CHAIN"
 
     echo "$PROXIES" | jq -r --arg n "$NAME" --arg t "$MIHOMO_GROUP_TYPES" '
         . as $p |
@@ -320,27 +301,56 @@ mihomo_auto_group_from()
 }
 
 
-# 主组联动：若主组包含目标组，把主组切过去，保证切换真正生效
+# 主组路由联动：让切换真正生效
+# 主路径：从真实链路找第一个“all 包含目标组”的 Selector 组（汇聚组）并切过去；
+# 回退：无活跃连接时用结构识别主组。输出实际切换的汇聚组名（空=无需联动）。
 mihomo_route_main_to()
 {
     local PROXIES="$1" GROUP="$2"
-    local MAIN MAIN_TYPE JSON
+    local ROUTE_GROUP MAIN MAIN_TYPE JSON CHAIN G T
 
-    MAIN=$(mihomo_main_group_from "$PROXIES")
-    [ -z "$MAIN" ] && return 0
-    [ "$MAIN" = "$GROUP" ] && return 0
+    ROUTE_GROUP=""
+    CHAIN=$(curl -s --max-time 3 "$(mihomo_api)/connections" \
+        | jq -r '.connections[]? | select((.chains // []) | length > 1) | .chains | join("\n")' \
+        | head -60 | tr -d '\r')
 
-    MAIN_TYPE=$(echo "$PROXIES" | jq -r --arg m "$MAIN" '.proxies[$m].type // empty' | tr -d '\r')
-    [ "$MAIN_TYPE" != "Selector" ] && return 0
+    while IFS= read -r G
+    do
+        [ -z "$G" ] && continue
+        [ "$G" = "$GROUP" ] && continue
+        T=$(echo "$PROXIES" | jq -r --arg g "$G" '.proxies[$g].type // empty' | tr -d '\r')
+        [ "$T" != "Selector" ] && continue
+        if [ "$(echo "$PROXIES" | jq -r --arg g "$G" --arg x "$GROUP" '((.proxies[$g].all // []) | index($x)) != null' | tr -d '\r')" = "true" ]
+        then
+            ROUTE_GROUP="$G"
+            break
+        fi
+    done <<< "$CHAIN"
 
-    [ "$(echo "$PROXIES" | jq -r --arg m "$MAIN" --arg g "$GROUP" '((.proxies[$m].all // []) | index($g)) != null' | tr -d '\r')" != "true" ] && return 0
+    if [ -z "$ROUTE_GROUP" ]
+    then
+        MAIN=$(mihomo_main_group_from "$PROXIES")
+        if [ -n "$MAIN" ] && [ "$MAIN" != "$GROUP" ]
+        then
+            MAIN_TYPE=$(echo "$PROXIES" | jq -r --arg m "$MAIN" '.proxies[$m].type // empty' | tr -d '\r')
+            if [ "$MAIN_TYPE" = "Selector" ] && \
+               [ "$(echo "$PROXIES" | jq -r --arg m "$MAIN" --arg g "$GROUP" '((.proxies[$m].all // []) | index($g)) != null' | tr -d '\r')" = "true" ]
+            then
+                ROUTE_GROUP="$MAIN"
+            fi
+        fi
+    fi
+
+    [ -z "$ROUTE_GROUP" ] && return 0
 
     JSON=$(jq -cn --arg n "$GROUP" '{name:$n}' | tr -d '\r')
     printf '%s' "$JSON" | curl -s -o /dev/null --max-time 3 \
         -X PUT \
         -H "Content-Type: application/json" \
         --data-binary @- \
-        "$(mihomo_api)/proxies/$(mihomo_uri "$MAIN")" || true
+        "$(mihomo_api)/proxies/$(mihomo_uri "$ROUTE_GROUP")" || true
+
+    echo "$ROUTE_GROUP"
 }
 
 
@@ -349,6 +359,7 @@ mihomo_switch()
 {
     local NAME="$1"
     local PROXIES GROUP TYPE AUTO API_URL CODE DELAY JSON MATCHES COUNT CANDIDATE
+    local ROUTE EFFECTIVE P2
     local TMPDIR LEAF_EXACT D
     local -a USABLE
     local i
@@ -460,17 +471,32 @@ $(printf '%s\n' "${USABLE[@]}" | head -10)
 
     if [ "$CODE" = "204" ] || [ "$CODE" = "200" ]
     then
-        # 主组联动，确保切换真正生效
-        mihomo_route_main_to "$PROXIES" "$GROUP"
+        # 主组路由联动，确保切换真正生效（返回实际切换的汇聚组）
+        ROUTE=$(mihomo_route_main_to "$PROXIES" "$GROUP")
+
+        # 校验生效节点：沿汇聚组（或目标组）的 now 链解析，避免旧连接缓存干扰
+        P2=$(curl -s --max-time 3 "$(mihomo_api)/proxies")
+        if [ -n "$ROUTE" ]
+        then
+            EFFECTIVE=$(mihomo_group_now_from "$P2" "$ROUTE")
+        else
+            EFFECTIVE=$(mihomo_group_now_from "$P2" "$GROUP")
+        fi
+        EFFECTIVE=$(mihomo_resolve_leaf_from "$P2" "$EFFECTIVE")
 
         DELAY=$(mihomo_delay "$NAME")
-        if [ -n "$DELAY" ]
+        if [ "$EFFECTIVE" = "$NAME" ]
         then
-            echo "✅ 已切换至: $NAME
+            if [ -n "$DELAY" ]
+            then
+                echo "✅ 已切换至: $NAME
 📶 当前延迟: ${DELAY}ms"
-        else
-            echo "✅ 已切换至: $NAME
+            else
+                echo "✅ 已切换至: $NAME
 📶 当前延迟: 超时"
+            fi
+        else
+            echo "⚠️ 已发送切换（$NAME），但当前生效节点仍是 ${EFFECTIVE:-未知}（可能被自动选择/分流规则接管）"
         fi
     else
         echo "❌ 切换失败（HTTP $CODE）：请确认节点名称是否正确"
